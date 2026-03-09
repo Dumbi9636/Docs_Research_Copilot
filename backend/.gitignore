@@ -1,0 +1,4 @@
+# .env는 루트 .gitignore에서 관리합니다.
+__pycache__/
+.venv/
+*.pyc

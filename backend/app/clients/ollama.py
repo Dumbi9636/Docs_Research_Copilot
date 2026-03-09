@@ -1,27 +1,28 @@
 import httpx
-
-OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL = "llama3"
+from app.core.config import settings
 
 
-def generate(prompt: str, model: str = DEFAULT_MODEL) -> str:
+def generate(prompt: str) -> str:
     """Ollama /api/generate 엔드포인트를 호출하고 응답 텍스트를 반환합니다."""
-    url = f"{OLLAMA_BASE_URL}/api/generate"
+    url = f"{settings.ollama_base_url}/api/generate"
     payload = {
-        "model": model,
+        "model": settings.ollama_model,
         "prompt": prompt,
         "stream": False,
     }
 
     try:
-        response = httpx.post(url, json=payload, timeout=120.0)
+        response = httpx.post(url, json=payload, timeout=settings.ollama_timeout)
     except httpx.ConnectError:
         raise RuntimeError("Ollama 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.")
     except httpx.TimeoutException:
         raise RuntimeError("Ollama 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.")
 
     if response.status_code == 404:
-        raise RuntimeError(f"모델 '{model}'을 찾을 수 없습니다. 'ollama pull {model}' 명령으로 모델을 설치해 주세요.")
+        raise RuntimeError(
+            f"모델 '{settings.ollama_model}'을 찾을 수 없습니다. "
+            f"'ollama pull {settings.ollama_model}' 명령으로 모델을 설치해 주세요."
+        )
 
     try:
         response.raise_for_status()

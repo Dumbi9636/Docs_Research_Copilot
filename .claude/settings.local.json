@@ -3,7 +3,11 @@
     "allow": [
       "Bash(xargs cat:*)",
       "Bash(node:*)",
-      "Bash(npx create-next-app@latest:*)"
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(.venv/Scripts/pip install:*)",
+      "Bash(.venv/Scripts/python:*)",
+      "Bash(curl:*)",
+      "Bash(kill 304:*)"
     ]
   }
 }
