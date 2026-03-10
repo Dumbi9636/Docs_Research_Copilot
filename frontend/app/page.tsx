@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import styles from "./page.module.css";
 import { summarizeText, summarizeFile } from "./lib/api";
 import FileUploadInput from "./components/FileUploadInput";
@@ -17,6 +17,20 @@ export default function Home() {
   const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [dots, setDots] = useState("");
+
+  // loading 상태에 따라 점 애니메이션을 시작하거나 정리합니다.
+  // loading이 false가 되면 cleanup 함수가 interval을 제거하고 dots를 초기화합니다.
+  useEffect(() => {
+    if (!loading) {
+      setDots("");
+      return;
+    }
+    const id = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? "" : prev + "."));
+    }, 500);
+    return () => clearInterval(id);
+  }, [loading]);
 
   function handleFileChange(selected: File | null) {
     setFile(selected);
@@ -79,7 +93,7 @@ export default function Home() {
         onClick={handleSummarize}
         disabled={loading || !canSubmit}
       >
-        {loading ? "요약 중..." : "요약하기"}
+        {loading ? `요약중${dots}` : "요약하기"}
       </button>
 
       {error && <div className={styles.error}>{error}</div>}

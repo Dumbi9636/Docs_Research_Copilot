@@ -6,7 +6,12 @@
 #
 # 비즈니스 로직은 summarizer.py에 작성되어 있습니다.
 
+import io
+
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from pypdf import PdfReader
+from pypdf.errors import PdfReadError
+
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.services import summarizer
 
@@ -14,9 +19,75 @@ router = APIRouter()
 
 # Swagger UI나 테스트 도구의 기본값("string", "example" 등)처럼
 # 의미 없는 입력을 차단합니다.
-# LLM 호출 비용을 낭비하지 않고 사용자에게 명확한 안내를 줍니다.
 PLACEHOLDER_VALUES = {"string", "text", "example", "sample"}
 
+# 파일 업로드에서 허용하는 확장자 목록입니다.
+# 새 형식을 지원할 때 여기에 추가하고, _extract_text()에 분기를 추가합니다.
+ALLOWED_EXTENSIONS = {".txt", ".pdf"}
+
+
+# ── 파일별 텍스트 추출 헬퍼 ──────────────────────────────────────────────────
+#
+# 각 함수는 파일 형식에 맞게 텍스트를 추출하고, 실패 시 HTTPException을 raise합니다.
+# 라우트 함수는 확장자에 따라 적절한 헬퍼를 호출하기만 하면 됩니다.
+
+def _read_txt(raw: bytes) -> str:
+    """
+    txt 파일 바이트를 UTF-8 문자열로 디코딩합니다.
+    utf-8-sig를 사용해 Windows 메모장 등이 추가하는 BOM도 자동 제거합니다.
+    """
+    try:
+        return raw.decode("utf-8-sig").strip()
+    except UnicodeDecodeError:
+        # UTF-8이 아닌 인코딩(EUC-KR 등)으로 저장된 파일은 여기서 걸립니다.
+        raise HTTPException(
+            status_code=400,
+            detail="파일을 UTF-8로 읽을 수 없습니다. 파일을 UTF-8로 저장한 뒤 다시 시도해 주세요.",
+        )
+
+
+def _read_pdf(raw: bytes) -> str:
+    """
+    PDF 파일 바이트에서 텍스트 레이어를 추출합니다.
+
+    지원 범위: 텍스트 레이어가 포함된 일반 PDF
+    미지원: 스캔 이미지 PDF (OCR 필요, 이번 단계에서 제외)
+
+    페이지별로 추출한 텍스트를 단락 구분자(\\n\\n)로 이어붙입니다.
+    summarizer의 chunking이 단락 단위로 분할하므로 페이지 경계를 단락으로 처리합니다.
+    """
+    try:
+        reader = PdfReader(io.BytesIO(raw))
+    except PdfReadError:
+        raise HTTPException(
+            status_code=400,
+            detail="PDF 파일을 읽을 수 없습니다. 파일이 손상되었거나 올바른 PDF 형식이 아닙니다.",
+        )
+    except Exception:
+        # 암호화된 PDF 등 pypdf가 처리하지 못하는 경우를 포괄합니다.
+        raise HTTPException(
+            status_code=400,
+            detail="PDF 파일을 처리할 수 없습니다. 암호화되지 않은 일반 PDF 파일을 업로드해 주세요.",
+        )
+
+    pages = [page.extract_text() or "" for page in reader.pages]
+    text = "\n\n".join(p for p in pages if p.strip()).strip()
+
+    if not text:
+        # 텍스트 레이어가 없는 스캔 PDF이거나 내용이 없는 경우입니다.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "PDF에서 텍스트를 추출할 수 없습니다. "
+                "스캔된 이미지 PDF는 지원하지 않습니다. "
+                "텍스트 레이어가 포함된 PDF를 업로드해 주세요."
+            ),
+        )
+
+    return text
+
+
+# ── 라우트 ────────────────────────────────────────────────────────────────────
 
 @router.get("/health")
 def health_check():
@@ -56,42 +127,44 @@ def summarize_route(request: SummarizeRequest):
 @router.post("/summarize/file", response_model=SummarizeResponse)
 async def summarize_file_route(file: UploadFile = File(...)):
     """
-    txt 파일을 업로드받아 기존 요약 파이프라인으로 처리합니다.
+    txt 또는 pdf 파일을 업로드받아 기존 요약 파이프라인으로 처리합니다.
 
     async def를 쓰는 이유: UploadFile.read()가 비동기 I/O이기 때문입니다.
-    summarize_route(텍스트 입력)는 I/O 없이 단순 JSON을 받으므로 동기 함수입니다.
 
-    steps 병합 전략:
-    - 파일 처리 단계(pre_steps)를 먼저 수집합니다.
-    - summarizer.summarize()가 반환한 steps 앞에 prepend합니다.
-    - summarizer.py 내부는 전혀 수정하지 않아도 됩니다.
+    흐름:
+      1. 파일 수신 및 확장자 검증
+      2. 확장자에 따라 _read_txt() 또는 _read_pdf()로 텍스트 추출
+      3. 텍스트 내용 검증 (비어있음 / 너무 짧음)
+      4. summarizer.summarize(text) 호출 — 기존 요약 파이프라인 그대로 사용
+      5. 파일 처리 단계(pre_steps)를 summarizer steps 앞에 붙여 반환
+
+    새 파일 형식 추가 방법:
+      1. ALLOWED_EXTENSIONS에 확장자 추가
+      2. 해당 형식의 _read_XXX() 함수 작성
+      3. 아래 추출 분기에 elif 추가
     """
     # ── 파일 형식 검증 ───────────────────────────────────────────────────────
-    # .txt 이외의 파일(pdf, docx 등)은 이번 단계에서 지원하지 않습니다.
     filename = file.filename or ""
-    if not filename.lower().endswith(".txt"):
+    # rsplit으로 마지막 점 이후를 확장자로 취급합니다.
+    ext = ("." + filename.rsplit(".", 1)[-1]).lower() if "." in filename else ""
+
+    if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="txt 파일만 업로드할 수 있습니다. pdf, docx 등은 아직 지원하지 않습니다.",
+            detail="txt 또는 pdf 파일만 업로드할 수 있습니다.",
         )
 
     pre_steps: list[str] = ["파일 수신 완료"]
 
-    # ── 파일 내용 읽기 및 디코딩 ─────────────────────────────────────────────
+    # ── 파일 읽기 및 텍스트 추출 ─────────────────────────────────────────────
     raw = await file.read()
 
-    try:
-        # utf-8-sig는 BOM(Byte Order Mark) 포함 UTF-8 파일도 처리합니다.
-        # 메모장 등 Windows 기본 편집기로 저장한 txt 파일에 BOM이 붙는 경우가 많습니다.
-        text = raw.decode("utf-8-sig").strip()
-    except UnicodeDecodeError:
-        # UTF-8이 아닌 인코딩(EUC-KR 등)으로 저장된 파일은 여기서 걸립니다.
-        raise HTTPException(
-            status_code=400,
-            detail="파일을 UTF-8로 읽을 수 없습니다. 파일을 UTF-8로 저장한 뒤 다시 시도해 주세요.",
-        )
-
-    pre_steps.append("텍스트 추출 완료")
+    if ext == ".txt":
+        text = _read_txt(raw)
+        pre_steps.append("텍스트 추출 완료")
+    else:  # .pdf
+        text = _read_pdf(raw)
+        pre_steps.append("PDF 텍스트 추출 완료")
 
     # ── 텍스트 내용 검증 ─────────────────────────────────────────────────────
     # 파일은 선택됐지만 내용이 없거나 너무 짧은 경우를 걸러냅니다.
