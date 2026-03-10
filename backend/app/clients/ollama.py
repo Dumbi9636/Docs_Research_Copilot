@@ -12,12 +12,16 @@ import httpx
 from app.core.config import settings
 
 
-def generate(prompt: str) -> str:
+def generate(prompt: str, num_predict: int = 1024) -> str:
     """
     Ollama /api/generate 엔드포인트를 호출하고 응답 텍스트를 반환합니다.
 
     Args:
-        prompt: LLM에 전달할 프롬프트 문자열
+        prompt:      LLM에 전달할 프롬프트 문자열
+        num_predict: 최대 출력 토큰 수. 기본값 1024는 충분히 넉넉한 상한입니다.
+                     호출 목적에 따라 줄이면 불필요하게 긴 출력을 방지할 수 있습니다.
+                     - chunk bullet 요약: 250 (bullet 3개 ≈ 150 토큰)
+                     - 최종 merge 요약:  700 (7문장 ≈ 500 토큰)
 
     Returns:
         LLM이 생성한 응답 텍스트
@@ -31,6 +35,11 @@ def generate(prompt: str) -> str:
         "model": settings.ollama_model,
         "prompt": prompt,
         "stream": False,  # 스트리밍 없이 응답 전체를 한 번에 받습니다.
+        "options": {
+            # 출력 토큰 상한. 모델이 필요 이상 길게 출력하는 것을 방지합니다.
+            # 실제 출력이 짧으면 이 값에 도달하기 전에 자연스럽게 종료됩니다.
+            "num_predict": num_predict,
+        },
     }
 
     # ── 네트워크 수준 예외 처리 ──────────────────────────────────────────────

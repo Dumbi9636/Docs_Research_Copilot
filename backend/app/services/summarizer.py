@@ -56,32 +56,35 @@ def _chunk_prompt(chunk: str) -> str:
     - bullet은 머지 단계에서 LLM이 중복을 제거하고 통합하기 쉬운 형태입니다.
     - "서두 없이 bullet만 출력"을 명시해 불필요한 말머리를 방지합니다.
     """
-    return f"""다음은 긴 문서의 일부입니다.
+    # chunk 프롬프트는 중간 단계용이므로 언어 규칙을 간결하게 유지합니다.
+    # 최종 언어 품질은 merge 단계의 강화된 규칙에서 보장합니다.
+    # 프롬프트를 짧게 유지할수록 chunk 호출당 처리 시간이 줄어듭니다.
+    return f"""다음은 긴 문서의 일부입니다. 반드시 한국어로만 출력하세요.
 
-[언어 규칙 — 가장 중요]
-- 출력 언어는 반드시 한국어입니다.
-- 입력 문서가 영어 등 어떤 언어이더라도 반드시 한국어로만 출력합니다.
-- 영어 문장으로 답하지 마세요.
-
-[내용 규칙]
-- 핵심 내용을 bullet 3개 이내로 요약합니다.
-- 설명이나 서두 없이 bullet 항목만 출력합니다.
+핵심 내용을 bullet 3개 이내로 요약합니다.
+설명이나 서두 없이 bullet 항목만 출력합니다.
 
 문서 일부:
 {chunk}"""
 
 
-def _merge_prompt(bullet_summaries: str) -> str:
+def _merge_prompt(bullet_summaries: str, target_sentences: str) -> str:
     """
     각 chunk의 bullet 요약을 하나의 자연스러운 요약문으로 통합하는 프롬프트입니다.
+
+    target_sentences: "3~5", "5~7", "7~9", "9~11" 등 chunk 수에 따라 결정됩니다.
+    chunk 중간 요약은 짧게 유지하고 이 단계에서만 출력 길이를 조정합니다.
 
     머지 단계가 필요한 이유:
     - chunk 요약들은 문서의 부분부분을 다루므로 그대로 이어붙이면 어색합니다.
     - 이 단계에서 LLM이 전체 흐름을 파악하고 중복을 제거해 완성된 요약을 만듭니다.
     - 긴 원문을 한 번에 처리하지 않고도 전체 요약 품질을 확보할 수 있습니다.
     """
+    # "~해 주세요" 요청형 대신 "~작성합니다" 서술형을 씁니다.
+    # 요청형은 모델이 작업을 수락하는 메타 문장("여기 N문장으로 요약해 드리겠습니다")을
+    # 먼저 출력하도록 유도하기 때문입니다.
     return f"""다음은 긴 문서를 여러 부분으로 나눠 요약한 결과입니다.
-이를 바탕으로 전체 문서를 3~5문장으로 통합 요약해 주세요.
+아래 부분 요약들을 바탕으로 {target_sentences}문장의 통합 요약문을 작성합니다.
 
 [언어 규칙 — 가장 중요]
 - 출력 언어는 반드시 한국어입니다.
@@ -90,8 +93,9 @@ def _merge_prompt(bullet_summaries: str) -> str:
 
 [내용 규칙]
 - 중복 내용은 제거하고, 자연스러운 한 편의 요약문으로 작성합니다.
-- "요약:", "통합 요약:", "다음은 요약입니다" 같은 머리말 없이 첫 문장부터 바로 시작합니다.
 - 요약문 본문만 출력합니다. 제목, 설명, 서두, 꼬리말은 일절 쓰지 않습니다.
+- 몇 문장을 쓸 것인지, 요약을 시작한다는 안내 문장은 쓰지 않습니다.
+- "요약:", "통합 요약:", "다음과 같이 요약합니다" 같은 머리말 없이 첫 문장부터 바로 시작합니다.
 - 첫 문장은 주어와 서술어를 갖춘 완전한 문장으로 시작합니다. "입니다."처럼 어미만 남은 불완전한 표현으로 시작하지 않습니다.
 
 부분 요약:
@@ -115,6 +119,12 @@ def _clean_summary_prefix(text: str) -> str:
     # "입니다."처럼 어미만 남은 불완전한 조각이 맨 앞에 붙는 경우를 제거합니다.
     # 정상 문장은 "입니다."로 시작하지 않으므로 오탐 위험이 낮습니다.
     text = re.sub(r"^\s*입니다\.\s*", "", text)
+    # "5~7문장으로 요약해 드리겠습니다." 처럼 목표 문장 수를 언급하는 메타 안내문을 제거합니다.
+    # 정상 요약 본문은 "숫자~숫자문장"으로 시작하지 않으므로 오탐 위험이 낮습니다.
+    text = re.sub(r"^\s*[^\n.]*\d+[~\-]\d+\s*문장[^\n.]*\.\s*", "", text)
+    # "다음과 같이 요약합니다/드리겠습니다" 류의 메타 안내문을 제거합니다.
+    # "합니다/하겠습니다/드리겠습니다"로 끝나는 경우만 제거해 오탐을 최소화합니다.
+    text = re.sub(r"^\s*다음과\s+같이?\s+[^\n]*(?:요약|정리)(?:합니다|하겠습니다|드리겠습니다)[^\n]*\.\s*", "", text)
     return text.strip()
 
 
@@ -178,6 +188,57 @@ def _split_chunks(text: str) -> list[str]:
     return [c for c in chunks if c]
 
 
+# ── 전처리 ───────────────────────────────────────────────────────────────────
+
+def _preprocess_text(text: str) -> str:
+    """
+    요약 파이프라인 진입 전에 텍스트를 정규화합니다.
+
+    PDF 추출이나 복사·붙여넣기 시 발생하는 과도한 공백·줄바꿈을 제거합니다.
+    - 3개 이상 연속 줄바꿈 → \n\n (단락 구분자로 통일)
+    - 연속 공백·탭 → 공백 1개
+
+    효과:
+    - chunk 분할이 단락 경계에서 더 깔끔하게 이루어집니다.
+    - LLM에 전달되는 불필요한 토큰이 줄어 처리 속도가 소폭 개선됩니다.
+    """
+    text = re.sub(r"[ \t]+", " ", text)       # 연속 공백·탭 압축
+    text = re.sub(r"\n{3,}", "\n\n", text)    # 3개 이상 줄바꿈을 단락 구분자로 정규화
+    return text.strip()
+
+
+# ── 동적 출력 길이 정책 ───────────────────────────────────────────────────────
+
+def _target_sentences(chunk_count: int) -> str:
+    """
+    chunk 수에 따라 최종 merge 요약의 목표 문장 수 범위를 결정합니다.
+
+    chunk 수를 기준으로 삼는 이유:
+    - _summarize_chunked() 안에서 이미 계산된 값이라 추가 연산이 없습니다.
+    - 1 chunk ≈ 1,000자이므로 사실상 글자 수에 비례합니다.
+
+    증가 정책 (완만한 계단식):
+    - chunk별 bullet 요약은 "3개 이내"로 그대로 유지합니다.
+    - 오직 최종 merge 1회에서만 출력 길이를 조정합니다.
+    - LLM 호출 횟수는 변하지 않습니다.
+
+    chunk 수   목표 문장
+    ──────────────────
+     2         3~5   (기존 동일)
+     3~4       5~7
+     5~7       7~9
+     8~10      9~11  (상한)
+    """
+    if chunk_count <= 2:
+        return "3~5"
+    elif chunk_count <= 4:
+        return "5~7"
+    elif chunk_count <= 7:
+        return "7~9"
+    else:
+        return "9~11"
+
+
 # ── 요약 진입점 ───────────────────────────────────────────────────────────────
 
 def summarize(text: str) -> SummarizeResponse:
@@ -193,6 +254,9 @@ def summarize(text: str) -> SummarizeResponse:
     """
     steps: list[str] = []
     steps.append("입력 검증 완료")
+
+    # 과도한 공백·줄바꿈을 정리해 chunking 품질과 처리 속도를 개선합니다.
+    text = _preprocess_text(text)
 
     if len(text) <= settings.chunk_threshold:
         return _summarize_single(text, steps)
@@ -247,6 +311,10 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
             f"문서를 나눠서 입력하거나 MAX_CHUNKS 설정을 조정해 주세요."
         )
 
+    # chunk 수에 따라 최종 요약의 목표 문장 수를 결정합니다.
+    # chunk별 중간 요약은 그대로 짧게 유지하고, merge 단계에서만 출력량을 조정합니다.
+    target_sentences = _target_sentences(total)
+
     steps.append(f"문서 분할 완료 ({total}개 chunk)")
 
     bullet_parts: list[str] = []
@@ -254,7 +322,9 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
     for i, chunk in enumerate(chunks, start=1):
         steps.append(f"chunk {i}/{total} 요약 중")
         try:
-            result = ollama.generate(_chunk_prompt(chunk))
+            # chunk bullet 요약은 3개 이내로 짧게 제한합니다.
+            # bullet 3개 × ~50토큰 = ~150토큰이면 충분하므로 250으로 상한합니다.
+            result = ollama.generate(_chunk_prompt(chunk), num_predict=250)
         except RuntimeError as e:
             # 실패한 chunk 번호를 steps와 에러 메시지에 모두 남깁니다.
             # 이유: "어디서 실패했는가"를 알아야 디버깅이 가능합니다.
@@ -265,9 +335,11 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
         bullet_parts.append(result)
 
     # 모든 chunk의 bullet 요약을 하나로 이어붙여 머지 프롬프트에 전달합니다.
-    steps.append("최종 통합 요약 중")
+    steps.append(f"최종 통합 요약 중 ({target_sentences}문장 목표)")
     try:
-        final = _clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts))))
+        # merge는 최종 요약이므로 문장 수 목표에 맞게 충분한 여유를 줍니다.
+        # 9~11문장 기준 최대 ~600토큰이므로 700으로 상한합니다.
+        final = _clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts), target_sentences), num_predict=700))
     except RuntimeError as e:
         steps.append("최종 통합 요약 실패")
         raise RuntimeError(f"최종 통합 요약 중 오류 발생: {e}")
