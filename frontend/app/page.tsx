@@ -66,7 +66,7 @@ export default function Home() {
   return (
     <main className={styles.container}>
       <h1 className={styles.title}>Docs Research Copilot</h1>
-      <p className={styles.subtitle}>문서를 붙여넣거나 txt 파일을 업로드하면 AI가 요약합니다.</p>
+      <p className={styles.subtitle}>문서를 붙여넣거나 txt / pdf / docx 파일을 업로드하면 AI가 요약합니다.</p>
 
       {/* ── 직접 입력 영역 ──────────────────────────────────────────────────── */}
       <label htmlFor="docInput" className={styles.label}>

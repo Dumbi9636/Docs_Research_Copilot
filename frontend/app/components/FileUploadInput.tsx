@@ -27,13 +27,13 @@ export default function FileUploadInput({ file, onFileChange }: Props) {
   return (
     <>
       <label htmlFor="fileInput" className={styles.label}>
-        파일 업로드 <span className={styles.labelSub}>(txt / pdf)</span>
+        파일 업로드 <span className={styles.labelSub}>(txt / pdf / docx)</span>
         <span className={styles.policyHint}>파일이 선택되면 파일을 우선합니다</span>
       </label>
       <input
         id="fileInput"
         type="file"
-        accept=".txt,.pdf"
+        accept=".txt,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className={styles.fileInput}
         onChange={handleInputChange}
       />
