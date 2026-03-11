@@ -7,6 +7,7 @@
 # Ollama 호출 자체는 app/clients/ollama.py에 위임합니다.
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.clients import ollama
 from app.core.config import settings
 from app.schemas.summarize import SummarizeResponse
@@ -31,8 +32,10 @@ def _single_prompt(text: str) -> str:
 [언어 규칙 — 가장 중요]
 - 출력 언어는 반드시 한국어입니다.
 - 입력 문서가 영어, 일본어, 중국어 등 어떤 언어로 작성되어 있더라도 요약은 반드시 한국어로만 작성합니다.
+- 중국어(한자) 문장을 출력하지 않습니다. 단 한 글자도 중국어로 쓰지 않습니다.
 - 영어 문장으로 답하지 마세요. 단 한 문장도 영어로 출력하지 않습니다.
-- 영문 고유명사나 전문 용어는 한국어 문장 안에 자연스럽게 포함시키되, 문장 자체는 한국어로 작성합니다.
+- 영문 고유명사나 전문 용어(AI, CPU 등)는 한국어 문장 안에 자연스럽게 포함시키되, 문장 자체는 한국어로 작성합니다.
+- "계속 중국어로", "继续用中文" 같은 언어 전환 지시문을 출력하지 않습니다.
 
 [내용 규칙]
 - 핵심 내용만 간결하게 작성합니다.
@@ -59,7 +62,13 @@ def _chunk_prompt(chunk: str) -> str:
     # chunk 프롬프트는 중간 단계용이므로 언어 규칙을 간결하게 유지합니다.
     # 최종 언어 품질은 merge 단계의 강화된 규칙에서 보장합니다.
     # 프롬프트를 짧게 유지할수록 chunk 호출당 처리 시간이 줄어듭니다.
-    return f"""다음은 긴 문서의 일부입니다. 반드시 한국어로만 출력하세요.
+    #
+    # 중국어 금지를 명시하는 이유:
+    # qwen 계열은 중국어가 내부 처리 언어여서, 한국어 지시를 받아도 중국어로 drift하는 경향이 있습니다.
+    # "한국어로만"이라는 긍정 지시보다 "중국어 금지"라는 부정 지시를 함께 쓰는 것이 더 효과적입니다.
+    return f"""다음은 긴 문서의 일부입니다.
+
+출력 언어: 반드시 한국어만 사용합니다. 중국어(한자)·영어·일본어로 출력하지 않습니다.
 
 핵심 내용을 bullet 3개 이내로 요약합니다.
 설명이나 서두 없이 bullet 항목만 출력합니다.
@@ -88,8 +97,10 @@ def _merge_prompt(bullet_summaries: str, target_sentences: str) -> str:
 
 [언어 규칙 — 가장 중요]
 - 출력 언어는 반드시 한국어입니다.
-- 입력이 영어 등 어떤 언어이더라도 반드시 한국어로만 출력합니다.
-- 영어 문장으로 답하지 마세요. 단 한 문장도 영어로 출력하지 않습니다.
+- 입력 부분 요약이 영어, 중국어, 일본어 등 어떤 언어이더라도 반드시 한국어로만 출력합니다.
+- 중국어(한자) 문장을 출력하지 않습니다. 단 한 글자도 중국어로 쓰지 않습니다.
+- 영어 문장으로 답하지 않습니다. 단 한 문장도 영어로 출력하지 않습니다.
+- "계속 중국어로", "继续用中文" 같은 언어 전환 지시문을 출력하지 않습니다.
 
 [내용 규칙]
 - 중복 내용은 제거하고, 자연스러운 한 편의 요약문으로 작성합니다.
@@ -126,6 +137,66 @@ def _clean_summary_prefix(text: str) -> str:
     # "합니다/하겠습니다/드리겠습니다"로 끝나는 경우만 제거해 오탐을 최소화합니다.
     text = re.sub(r"^\s*다음과\s+같이?\s+[^\n]*(?:요약|정리)(?:합니다|하겠습니다|드리겠습니다)[^\n]*\.\s*", "", text)
     return text.strip()
+
+
+def _strip_language_noise(text: str) -> str:
+    """
+    중국어 오염 문장과 언어 메타 지시문을 제거합니다.
+
+    _clean_summary_prefix가 앞머리 패턴만 다루는 것과 달리,
+    이 함수는 본문 중간에 섞인 오염 라인을 줄 단위로 정리합니다.
+
+    적용 대상:
+    - 사용자에게 최종 노출되는 summary (single / merge 모두)
+
+    설계 원칙:
+    - 오탐(정상 한국어 문장 제거) 위험을 최소화하기 위해 보수적 기준을 사용합니다.
+    - 한자가 4자 이상이고 해당 줄에서 CJK 문자 중 한자 비율이 80% 이상인 줄만 제거합니다.
+    - 현대 한국어에는 한자(Hanja)가 거의 없으므로 오탐 위험이 낮습니다.
+    """
+    # ── 1단계: 알려진 중국어 메타 지시문 패턴을 줄째로 제거 ─────────────────────
+    # 실제 관측된 패턴들:
+    #   "继续用中文完成总结"   → "중국어로 계속 요약을 완성합니다"
+    #   "应当继续用中文完成总结" → "중국어로 계속 완성해야 합니다"
+    # [^\n]* 로 해당 줄 전체를 매칭해 줄 단위로 제거합니다.
+    known_patterns = [
+        r"[^\n]*继续用中文[^\n]*",           # "계속 중국어로" 변형 전체
+        r"[^\n]*应当继续用中文[^\n]*",       # "중국어로 계속해야" 변형 전체
+        r"[^\n]*中文摘要[^\n]*",             # "중국어 요약" 표제
+        r"[^\n]*用中文(?:完成|作答|输出)[^\n]*",  # "중국어로 완성/답변/출력"
+        # qwen 특이 패턴: 작업 수락 표현을 중국어로 내보내는 경우
+        r"[^\n]*好的[，,]\s*以下是[^\n]*",   # "好的，以下是韩语摘要：" 류
+        r"[^\n]*以下是(?:总结|摘要|韩语)[^\n]*",  # "以下是总结：" 류
+    ]
+    for pattern in known_patterns:
+        text = re.sub(pattern, "", text)
+
+    # ── 2단계: 줄 단위 중국어 비율 검사 ─────────────────────────────────────────
+    # CJK Unified Ideographs U+4E00–U+9FFF: 중국어 간체·번체, 일본어 한자, 한국어 한자 공통
+    # Hangul Syllables U+AC00–U+D7A3: 한글 전용
+    # 현대 한국어 문장에서 U+4E00–U+9FFF 범위 문자가 많다면 중국어 오염으로 간주합니다.
+    #
+    # 제거 조건 (둘 다 충족해야 제거):
+    #   - 해당 줄의 한자(U+4E00-U+9FFF) 수가 4자 이상
+    #   - CJK 문자(한자 + 한글) 중 한자 비율이 80% 초과
+    # → 한국어 문장에 간간이 섞인 한자 용어(예: "人工知能")는 남기고,
+    #   거의 전체가 중국어인 줄만 제거합니다.
+    lines = text.split("\n")
+    clean_lines = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            clean_lines.append(line)
+            continue
+        chinese = sum(1 for c in stripped if "\u4e00" <= c <= "\u9fff")
+        korean  = sum(1 for c in stripped if "\uac00" <= c <= "\ud7a3")
+        total_cjk = chinese + korean
+        if chinese >= 4 and total_cjk > 0 and chinese / total_cjk > 0.8:
+            continue  # 중국어 오염 라인으로 판단하여 제거
+        clean_lines.append(line)
+
+    # 제거로 생긴 빈 줄이 3개 이상 연속되면 단락 구분자로 정규화합니다.
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(clean_lines)).strip()
 
 
 # ── 텍스트 분할 ──────────────────────────────────────────────────────────────
@@ -239,6 +310,35 @@ def _target_sentences(chunk_count: int) -> str:
         return "9~11"
 
 
+# ── chunk 단위 병렬 요약 워커 ─────────────────────────────────────────────────
+#
+# 모듈 수준 함수로 분리한 이유:
+# ThreadPoolExecutor는 제출된 함수를 내부 스레드에서 호출합니다.
+# 중첩 함수(클로저)는 Windows에서 pickle 직렬화 시 문제가 생길 수 있어,
+# 모듈 수준 함수로 두는 것이 안전합니다.
+#
+# 이 함수는 _summarize_chunked()에서만 사용합니다.
+# 인자로 (i, chunk, total)을 받고 (i, bullet_result)를 반환합니다.
+# i를 함께 반환하는 이유: as_completed는 완료 순서로 결과를 내보내므로,
+# 호출자가 원문 순서를 복원하려면 index가 필요합니다.
+
+def _summarize_one_chunk(i: int, chunk: str, total: int) -> tuple[int, str]:
+    """
+    단일 chunk를 bullet 요약합니다. ThreadPoolExecutor의 워커 함수입니다.
+
+    Returns:
+        (i, bullet_result): 원문 순서 복원에 필요한 index와 요약 결과
+
+    Raises:
+        RuntimeError: Ollama 호출 실패 시. chunk 번호를 메시지에 포함합니다.
+    """
+    try:
+        result = ollama.generate(_chunk_prompt(chunk), num_predict=250)
+        return i, result
+    except RuntimeError as e:
+        raise RuntimeError(f"chunk {i}/{total} 요약 중 오류 발생: {e}")
+
+
 # ── 요약 진입점 ───────────────────────────────────────────────────────────────
 
 def summarize(text: str) -> SummarizeResponse:
@@ -274,7 +374,7 @@ def _summarize_single(text: str, steps: list[str]) -> SummarizeResponse:
     (1개짜리 chunk를 bullet으로 요약하고 머지하는 건 불필요한 LLM 호출입니다)
     """
     steps.append("Ollama 요청 전송")
-    result = _clean_summary_prefix(ollama.generate(_single_prompt(text)))
+    result = _strip_language_noise(_clean_summary_prefix(ollama.generate(_single_prompt(text))))
     steps.append("응답 수신 완료")
     steps.append("요약 생성 완료")
     return SummarizeResponse(summary=result, steps=steps)
@@ -317,29 +417,57 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
 
     steps.append(f"문서 분할 완료 ({total}개 chunk)")
 
-    bullet_parts: list[str] = []
+    # ── chunk 병렬 요약 ────────────────────────────────────────────────────────
+    #
+    # max_workers는 settings.summarize_max_workers(.env의 SUMMARIZE_MAX_WORKERS)로
+    # 제어합니다. OLLAMA_NUM_PARALLEL 환경변수와 같은 값으로 맞추는 것을 권장합니다.
+    #
+    # 순서 보장 설계:
+    # - as_completed는 완료 순서로 future를 yield합니다 (원문 순서와 다를 수 있음).
+    # - 각 future의 index를 futures dict에 보존하고, 결과를 results[i]에 저장합니다.
+    # - 모든 future 완료 후 sorted(results)로 재조립해 원문 순서를 복원합니다.
+    #
+    # 실패 처리 전략 (fail-fast):
+    # - 하나라도 실패하면 즉시 RuntimeError를 raise합니다.
+    # - 이미 실행 중인 스레드는 완료될 때까지 계속 돌지만 결과는 버립니다.
+    # - 부분 요약으로 merge를 만들면 최종 품질이 불균형해지므로 중단이 맞습니다.
+    #
+    # steps 로그 설계:
+    # - "시작" 로그는 병렬 구간 진입 시 한 번만 남깁니다.
+    # - "완료" 로그는 as_completed 순서대로 append합니다 (완료 순서 = 실제 흐름).
+    # - 순서가 섞여도 됩니다. bullet_parts 최종 순서는 sorted()가 보장합니다.
 
-    for i, chunk in enumerate(chunks, start=1):
-        steps.append(f"chunk {i}/{total} 요약 중")
-        try:
-            # chunk bullet 요약은 3개 이내로 짧게 제한합니다.
-            # bullet 3개 × ~50토큰 = ~150토큰이면 충분하므로 250으로 상한합니다.
-            result = ollama.generate(_chunk_prompt(chunk), num_predict=250)
-        except RuntimeError as e:
-            # 실패한 chunk 번호를 steps와 에러 메시지에 모두 남깁니다.
-            # 이유: "어디서 실패했는가"를 알아야 디버깅이 가능합니다.
-            #       단순히 "요약 실패"만 남기면 10개 chunk 중 어느 것인지 모릅니다.
-            steps.append(f"chunk {i}/{total} 요약 실패")
-            raise RuntimeError(f"chunk {i}/{total} 요약 중 오류 발생: {e}")
-        steps.append(f"chunk {i}/{total} 요약 완료")
-        bullet_parts.append(result)
+    steps.append(
+        f"chunk 병렬 요약 시작 ({total}개, 동시 {settings.summarize_max_workers}개)"
+    )
+
+    results: dict[int, str] = {}
+
+    with ThreadPoolExecutor(max_workers=settings.summarize_max_workers) as executor:
+        futures = {
+            executor.submit(_summarize_one_chunk, i, chunk, total): i
+            for i, chunk in enumerate(chunks, start=1)
+        }
+
+        for future in as_completed(futures):
+            i = futures[future]
+            try:
+                idx, result = future.result()
+                results[idx] = result
+                steps.append(f"chunk {idx}/{total} 요약 완료")
+            except RuntimeError as e:
+                steps.append(f"chunk {i}/{total} 요약 실패")
+                raise
+
+    # index 순서대로 정렬해 원문 chunk 순서를 복원합니다.
+    bullet_parts = [results[i] for i in sorted(results)]
 
     # 모든 chunk의 bullet 요약을 하나로 이어붙여 머지 프롬프트에 전달합니다.
     steps.append(f"최종 통합 요약 중 ({target_sentences}문장 목표)")
     try:
         # merge는 최종 요약이므로 문장 수 목표에 맞게 충분한 여유를 줍니다.
         # 9~11문장 기준 최대 ~600토큰이므로 700으로 상한합니다.
-        final = _clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts), target_sentences), num_predict=700))
+        final = _strip_language_noise(_clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts), target_sentences), num_predict=700)))
     except RuntimeError as e:
         steps.append("최종 통합 요약 실패")
         raise RuntimeError(f"최종 통합 요약 중 오류 발생: {e}")
