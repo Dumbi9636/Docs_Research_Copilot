@@ -1,292 +1,239 @@
 # Docs Research Copilot
 
-사용자가 텍스트 또는 문서 파일을 입력하면, Ollama 기반 LLM이 핵심 내용을 한국어로 요약해 주는 문서 요약 서비스입니다.  
-짧은 문서는 단일 요약으로, 긴 문서는 chunking 기반 중간 요약 후 최종 통합 요약 방식으로 처리합니다.
+문서 파일을 업로드하면 텍스트를 추출하고 Ollama 기반 LLM이 핵심 내용을 한국어로 요약해 주는 서비스입니다.
 
 ---
 
-## 1. 프로젝트 개요
+## 지원 입력 형식
 
-### 프로젝트명
-Docs Research Copilot
+| 형식 | 처리 방식 |
+|---|---|
+| `.txt` | UTF-8 텍스트 직접 읽기 |
+| `.pdf` | 텍스트 레이어 추출 + 이미지 페이지 OCR (페이지 단위 hybrid) |
+| `.docx` | 문단·제목·표 셀 텍스트 추출 |
+| `.png` `.jpg` `.jpeg` | Tesseract OCR로 이미지 텍스트 추출 |
 
-### 프로젝트 목표
-- 사용자가 긴 문서를 빠르게 이해할 수 있도록 핵심 내용을 한국어로 요약
-- 단순 요약 결과뿐 아니라 처리 단계(steps)도 함께 제공하여 흐름을 확인할 수 있도록 구성
-- MVP를 넘어, 긴 문서 처리와 파일 업로드까지 지원하는 실무형 구조로 확장
-
-### 현재 지원 범위
-- 직접 텍스트 입력 요약
-- txt 파일 업로드 요약
-- PDF 파일 업로드 요약
-- 긴 문서 chunking 요약
-- 요약 결과 + 처리 단계 표시
+직접 텍스트 입력도 지원합니다.
 
 ---
 
-## 2. 주요 기능
+## 주요 기능
 
-### 1) 텍스트 직접 입력 요약
-사용자가 textarea에 문서를 직접 입력하면 요약 결과를 생성합니다.
+### 파일 형식별 텍스트 추출
 
-### 2) txt 파일 업로드 요약
-txt 파일 내용을 읽어 기존 요약 파이프라인으로 전달합니다.  
-UTF-8 BOM이 포함된 txt 파일도 처리할 수 있도록 대응했습니다.
+**txt**
+- UTF-8 / UTF-8 BOM 자동 처리
 
-### 3) PDF 파일 업로드 요약
-텍스트 레이어가 포함된 일반 PDF에서 텍스트를 추출한 뒤 요약합니다.  
-스캔 이미지 PDF(OCR 필요)는 현재 지원하지 않습니다.
+**pdf**
+- pypdf로 텍스트 레이어 추출 시도
+- 페이지별로 텍스트가 충분하면 텍스트 사용, 부족하면 pymupdf로 이미지 변환 후 OCR 적용
+- 텍스트 PDF, 스캔 PDF, 혼합형 PDF 모두 처리 가능
 
-### 4) 긴 문서 chunking 요약
-문서 길이가 일정 기준을 넘으면:
-- 문서를 여러 chunk로 분할
-- 각 chunk를 중간 요약
-- 최종 통합 요약 생성
+**docx**
+- 일반 문단, 제목, 표(table) 셀 텍스트 추출
+- 원문 순서(단락·표 순서)를 유지하며 추출
+- 미지원: 텍스트 상자, 머리글/바닥글, 주석/각주, 이미지 내부 텍스트
 
-방식으로 처리하여 긴 문서에서도 안정적인 요약을 시도합니다.
+**이미지 (png / jpg / jpeg)**
+- Tesseract OCR (kor+eng 언어팩)
+- 전처리: 그레이스케일 → 소형 이미지 확대 → 오토 컨트라스트 → 이진화
+- Tesseract 옵션: `--psm 6 --oem 3`
+- OCR 원문 미리보기를 steps와 서버 로그에 기록 (디버깅용)
 
-### 5) 처리 단계(steps) 제공
-사용자에게 단순 결과만 보여주는 것이 아니라,
-문서가 어떤 단계를 거쳐 요약되었는지 함께 표시합니다.
+### 요약 파이프라인
 
-예:
-- 파일 수신 완료
-- PDF 텍스트 추출 완료
-- 입력 검증 완료
-- 문서 분할 완료
-- chunk 1/N 요약 완료
-- 최종 요약 생성 완료
+문서 길이에 따라 처리 방식이 자동으로 분기됩니다.
 
-### 6) 출력 형식 정리
-모델이 `"한국어 요약:"`, `"요약:"` 같은 머리말을 붙이거나  
-불완전한 조각(`"입니다."`)으로 시작하는 문제를 줄이기 위해  
-프롬프트 보강과 후처리를 통해 출력 형식을 개선했습니다.
+- **단일 요약**: 짧은 문서를 LLM 1회 호출로 직접 요약
+- **청킹 요약**: 긴 문서를 chunk로 분할 → 각 chunk 중간 요약(병렬) → 최종 통합 요약
 
----
+### 처리 단계(steps) 제공
 
-## 3. 기술 스택
+요약 결과와 함께 파일 수신부터 최종 요약까지 각 단계를 사용자에게 표시합니다.
 
-### Backend
-- Python
-- FastAPI
-
-### LLM
-- Ollama
-
-### Frontend
-- Next.js
-- TypeScript
-
-### 기타
-- pydantic-settings
-- httpx
-- python-multipart
-- pypdf
+```
+파일 수신 완료
+PDF 페이지별 혼합 추출 시작 (3페이지)
+페이지 2: 이미지 → OCR 완료
+PDF 추출 완료 (텍스트 2페이지, OCR 1페이지)
+입력 검증 완료
+문서 분할 완료 (4개 chunk)
+chunk 병렬 요약 시작 (4개, 동시 1개)
+chunk 1/4 요약 완료
+...
+최종 요약 생성 완료
+```
 
 ---
 
-## 4. 프로젝트 구조
+## 처리 흐름
+
+```
+txt   ──→ UTF-8 텍스트 추출
+docx  ──→ 문단 · 표 셀 텍스트 추출
+이미지 ──→ OCR (전처리 → Tesseract)              ┐
+pdf   ──→ 페이지별: 텍스트 레이어 or OCR fallback  ┘
+                   ↓
+           공통 텍스트 검증 (빈 내용 · 너무 짧은 입력 차단)
+                   ↓
+           summarizer (single or chunking)
+                   ↓
+           한국어 출력 보정 (CJK · 금지 영어 구절 감지 → 재작성)
+                   ↓
+           { summary, steps }
+```
+
+---
+
+## 프로젝트 구조
+
+```
+docs_research_copilot/
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── routes.py            # 업로드 엔드포인트, 파일 형식 분기, 에러 변환
+│   │   ├── clients/
+│   │   │   └── ollama.py            # Ollama HTTP 호출 전담
+│   │   ├── core/
+│   │   │   └── config.py            # 환경설정 (pydantic-settings, .env)
+│   │   ├── schemas/
+│   │   │   └── summarize.py         # 요청·응답 스키마
+│   │   └── services/
+│   │       ├── summarizer.py        # single / chunk / merge 요약, 한국어 출력 보정
+│   │       ├── pdf_extractor.py     # PDF 텍스트 추출 + 페이지 단위 OCR hybrid
+│   │       └── ocr_extractor.py     # 이미지 OCR 추출 (전처리 포함)
+│   ├── requirements.txt
+│   └── .env                         # 환경변수 (git 미포함)
+│
+└── frontend/
+    └── app/
+        ├── components/
+        │   ├── FileUploadInput.tsx   # 파일 선택 UI (accept 설정 포함)
+        │   └── SummaryResult.tsx     # 요약 결과 및 steps 표시
+        ├── lib/
+        │   └── api.ts               # 백엔드 API 호출 함수
+        └── page.tsx                 # 메인 페이지
+```
+
+---
+
+## 한국어 출력 안정성
+
+`qwen2.5:7b` 사용 시 요약 출력에 중국어·한자가 혼입되는 문제가 있었습니다.
+
+**관찰된 문제 유형**
+
+| 유형 | 예시 |
+|---|---|
+| 중국어 지시 메타 문구 | `继续用中文`, `若要概括...`, `请用韩语...` |
+| 본문 항목 중국어 출력 | `- 编程`, `- 散步`, `- 喝咖啡` |
+
+**적용한 대응**
+
+- single / chunk / merge 프롬프트에 한국어 전용 출력 규칙 강화
+  - 한자·히라가나·카타카나 1자도 허용하지 않음
+  - 목록 항목 포함 전체 출력 대상
+- `_clean_summary_prefix`: 앞머리 메타 문구 제거
+- `_strip_language_noise`: 중국어 오염 라인 비율 검사 후 제거
+
+**최종 출력 감지 및 재작성 구조**
+
+```
+_has_forbidden_output(text)
+    ├── _has_cjk()              한자 · 히라가나 · 카타카나 1자 이상 → True
+    └── _has_forbidden_english() 2개 이상 연속 영어 단어 중 whitelist 外 존재 → True
+
+감지 시 → _korean_rewrite()     의미 보존 + 한국어 재작성 1회
+재작성 후 재검증 → 잔존 시 step 기록
+재작성 실패 시 → 원본 결과 유지 (전체 요약 중단 없음)
+```
+
+**허용 영어 표현 (whitelist)**
+
+기술 약어·플랫폼 고유명사는 한국어 문장 안에서도 허용합니다.
+
+```
+AI, ML, DL, NLP, LLM, GPT, API, OCR, PDF
+CPU, GPU, RAM, URL, HTTP, JSON, SQL ...
+FastAPI, Python, Tesseract, Docker, GitHub
+Qwen, ChatGPT, Claude, Ollama, OpenAI, Gemini
+Google, Naver, Kakao, Microsoft, Apple, Amazon ...
+```
+
+---
+
+## 실행 방법
+
+### 사전 준비
+
+- Python 3.11+
+- Node.js 18+
+- [Ollama](https://ollama.com) 설치 및 모델 pull
+- [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) 설치 (kor+eng 언어팩 포함)
 
-### Backend
-```text
-backend/
-└── app/
-    ├── api/
-    │   └── routes.py
-    ├── clients/
-    │   └── ollama.py
-    ├── core/
-    │   └── config.py
-    ├── schemas/
-    │   └── summarize.py
-    └── services/
-        └── summarizer.py
+```bash
+# Ollama 모델 설치
+ollama pull qwen2.5:7b
+```
 
-frontend/
-└── app/
-    ├── components/
-    │   ├── FileUploadInput.tsx
-    │   └── SummaryResult.tsx
-    ├── lib/
-    │   └── api.ts
-    ├── page.module.css
-    └── page.tsx
+### 백엔드
 
-5. 핵심 설계 포인트
-1) 역할 분리
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+pip install -r requirements.txt
 
-clients/ : 외부 시스템(Ollama) 호출 전담
+# .env 파일 생성
+cp .env.example .env          # 없으면 직접 작성
 
-services/ : 요약 흐름 및 비즈니스 로직
+uvicorn app.main:app --reload --port 8000
+```
 
-api/ : 입력 검증, HTTP 요청/응답 처리
+**.env 주요 설정**
 
-core/ : 환경설정 관리
+```env
+OLLAMA_MODEL=qwen2.5:7b
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_TIMEOUT=180
+TARGET_CHUNK_SIZE=2000
+SUMMARIZE_MAX_WORKERS=1
+```
 
-외부 API 호출과 내부 요약 로직을 분리하여 유지보수성을 높였습니다.
+> `SUMMARIZE_MAX_WORKERS=1`이 로컬 환경에서 가장 안정적입니다.
+> GPU 병렬 추론 환경에서는 `OLLAMA_NUM_PARALLEL`과 함께 2 이상으로 조정할 수 있습니다.
 
-2) 설정 분리
+### 프론트엔드
 
-Ollama URL, 모델명, timeout, chunk 설정 등을 .env와 pydantic-settings로 분리하여
-하드코딩 없이 관리할 수 있도록 구성했습니다.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-3) 긴 문서 처리 전략
+브라우저에서 `http://localhost:3000` 접속
 
-긴 문서를 한 번에 요약하면:
+---
 
-응답이 잘리거나
+## 현재 한계
 
-품질이 흔들리거나
+| 항목 | 상태 |
+|---|---|
+| OCR 정확도 | 이미지 품질·해상도에 따라 결과가 크게 달라질 수 있음 |
+| 이미지/스캔 페이지 | 띄어쓰기 과분리·오인식 가능 |
+| 혼합형 PDF | 페이지별 추출은 되지만, 서로 다른 맥락의 페이지를 합칠 때 문맥 연결이 어색할 수 있음 |
+| docx 내부 이미지 | OCR 미지원 — 이미지로만 구성된 내용은 추출되지 않음 |
+| 텍스트 상자·도형 | docx / PDF 모두 미지원 |
+| 영어 허용 정책 | whitelist 기반 1차 구현 — 미등록 고유명사는 금지 표현으로 오판될 수 있음 |
+| 모델 의존성 | qwen2.5:7b 기준 튜닝 — 다른 모델에서 출력 안정성이 다를 수 있음 |
 
-중요한 내용이 누락될 가능성이 있어
+---
 
-chunking 기반 요약 구조를 적용했습니다.
+## 향후 개선 방향
 
-4) 파일 업로드 확장 방식
-
-txt와 PDF 모두
-“파일 수신 → 텍스트 추출 → 공통 검증 → 기존 summarize 파이프라인 전달”
-방식으로 처리해 기존 구조를 최대한 재사용했습니다.
-
-6. 요약 처리 흐름
-짧은 문서
-
-입력 검증
-
-단일 프롬프트 생성
-
-Ollama 호출
-
-한국어 요약 결과 반환
-
-긴 문서
-
-입력 검증
-
-chunk 분할
-
-chunk별 중간 요약
-
-최종 통합 요약
-
-결과 반환
-
-파일 업로드
-
-파일 수신
-
-파일 형식별 텍스트 추출
-
-txt → UTF-8 / UTF-8 BOM 대응
-
-pdf → 텍스트 레이어 추출
-
-공통 텍스트 검증
-
-기존 summarize 로직 재사용
-
-7. 예외 처리
-
-다음과 같은 상황에 대해 예외 처리를 적용했습니다.
-
-빈 문자열 입력
-
-placeholder 수준 입력
-
-너무 짧은 텍스트
-
-txt가 아닌 잘못된 파일 형식
-
-UTF-8로 읽을 수 없는 txt 파일
-
-손상된 PDF
-
-텍스트 레이어가 없는 스캔 PDF
-
-Ollama 서버 연결 실패
-
-timeout
-
-모델 없음
-
-빈 응답
-
-8. 테스트 및 검증
-
-수동 회귀 테스트용 TEST_CASES.md를 작성하여 아래 항목을 검증할 수 있도록 정리했습니다.
-
-textarea 직접 입력 요약
-
-긴 문서 chunking 동작
-
-txt 업로드 정상/예외 케이스
-
-PDF 업로드 정상/예외 케이스
-
-입력 우선순위 정책
-
-출력 형식(머리말 제거, 한국어 출력)
-
-리팩토링 후 회귀 테스트
-
-Swagger 기반 백엔드 단독 테스트
-
-9. 구현하면서 개선한 부분
-1) 머리말 제거
-
-모델이 "한국어 요약:", "요약:" 같은 문구를 붙이는 문제를
-프롬프트 수정과 후처리 로직으로 개선했습니다.
-
-2) 한국어 출력 강제
-
-PDF 요약 과정에서 한글 입력임에도 영어 결과가 출력되는 문제를 확인했고,
-모든 프롬프트에 반드시 한국어로만 출력하도록 규칙을 강화했습니다.
-
-3) 프론트 구조 정리
-
-기존 page.tsx에 몰려 있던 로직을 분리해
-
-lib/api.ts
-
-FileUploadInput.tsx
-
-SummaryResult.tsx
-
-구조로 정리하여 가독성과 유지보수성을 높였습니다.
-
-4) 로딩 UX 개선
-
-요약 버튼 로딩 중 "요약중..." 텍스트에 점 애니메이션을 추가해
-사용자에게 진행 상태가 더 자연스럽게 보이도록 개선했습니다.
-
-10. 현재 한계
-
-스캔 이미지 PDF는 지원하지 않음 (OCR 미적용)
-
-PDF 텍스트 추출 품질은 문서 구조와 텍스트 레이어 상태에 따라 달라질 수 있음
-
-매우 긴 문서는 chunk 수 증가로 처리 시간이 길어질 수 있음
-
-현재 요약 결과는 기본적으로 짧은 한국어 요약 중심이며, 다양한 요약 모드까지는 아직 지원하지 않음
-
-11. 향후 확장 방향
-
-- 요약 모드 선택 기능 추가
-
-- 짧게 요약
-
-- bullet 요약
-
-- 자세히 요약
-
-- PDF 전처리 개선
-
-- 불필요한 줄바꿈/공백 정리
-
-- 머리말/꼬리말 제거
-
-- Word(docx) 업로드 지원
-
-- OCR 기반 스캔 PDF 지원 검토
-
-- 테스트 자동화(pytest 등) 확장
+1. **docx 내부 이미지 OCR** — zipfile 기반 이미지 추출 후 기존 OCR 파이프라인 연결
+2. **혼합 문서 merge 프롬프트 개선** — 서로 다른 맥락 페이지 간 통합 요약 품질 향상
+3. **OCR 추가 개선** — 적응형 이진화, 노이즈 제거 등 전처리 강화
+4. **영어 허용 정책 고도화** — 단순 whitelist를 넘어 문맥 기반 판단
+5. **LLM 교체 검토** — 로컬 모델 한계 확인 시 OpenAI / Gemini 등 API 모델 비교
