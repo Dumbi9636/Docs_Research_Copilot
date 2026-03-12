@@ -30,9 +30,10 @@ def _single_prompt(text: str) -> str:
 아래 문서를 읽고 다음 규칙에 따라 요약해 주세요.
 
 [언어 규칙 — 가장 중요]
-- 출력 언어는 반드시 한국어입니다.
+- 출력 언어는 반드시 한국어(한글)입니다.
 - 입력 문서가 영어, 일본어, 중국어 등 어떤 언어로 작성되어 있더라도 요약은 반드시 한국어로만 작성합니다.
-- 중국어(한자) 문장을 출력하지 않습니다. 단 한 글자도 중국어로 쓰지 않습니다.
+- 출력에 중국어(한자)를 단 한 글자도 포함하지 않습니다. 문장이든 목록 항목이든 예외 없이 금지입니다.
+- 출력에 일본어(히라가나·카타카나)를 포함하지 않습니다.
 - 영어 문장으로 답하지 마세요. 단 한 문장도 영어로 출력하지 않습니다.
 - 영문 고유명사나 전문 용어(AI, CPU 등)는 한국어 문장 안에 자연스럽게 포함시키되, 문장 자체는 한국어로 작성합니다.
 - "계속 중국어로", "继续用中文", "若要概括", "请用韩语" 같은 언어 전환·지시 문구를 출력하지 않습니다.
@@ -69,7 +70,8 @@ def _chunk_prompt(chunk: str) -> str:
     # "한국어로만"이라는 긍정 지시보다 "중국어 금지"라는 부정 지시를 함께 쓰는 것이 더 효과적입니다.
     return f"""다음은 긴 문서의 일부입니다.
 
-출력 언어: 반드시 한국어만 사용합니다. 중국어(한자)·영어·일본어로 출력하지 않습니다.
+출력 언어: 반드시 한국어(한글)만 사용합니다.
+중국어(한자)·일본어·영어를 출력하지 않습니다. 단 한 글자도 중국어로 쓰지 않습니다.
 
 핵심 내용을 bullet 3개 이내로 요약합니다.
 설명이나 서두 없이 bullet 항목만 출력합니다.
@@ -97,9 +99,10 @@ def _merge_prompt(bullet_summaries: str, target_sentences: str) -> str:
 아래 부분 요약들을 바탕으로 {target_sentences}문장의 통합 요약문을 작성합니다.
 
 [언어 규칙 — 가장 중요]
-- 출력 언어는 반드시 한국어입니다.
+- 출력 언어는 반드시 한국어(한글)입니다.
 - 입력 부분 요약이 영어, 중국어, 일본어 등 어떤 언어이더라도 반드시 한국어로만 출력합니다.
-- 중국어(한자) 문장을 출력하지 않습니다. 단 한 글자도 중국어로 쓰지 않습니다.
+- 출력에 중국어(한자)를 단 한 글자도 포함하지 않습니다. 문장이든 목록 항목이든 예외 없이 금지입니다.
+- 출력에 일본어(히라가나·카타카나)를 포함하지 않습니다.
 - 영어 문장으로 답하지 않습니다. 단 한 문장도 영어로 출력하지 않습니다.
 - "계속 중국어로", "继续用中文" 같은 언어 전환 지시문을 출력하지 않습니다.
 
@@ -216,6 +219,49 @@ def _strip_language_noise(text: str) -> str:
 
     # 제거로 생긴 빈 줄이 3개 이상 연속되면 단락 구분자로 정규화합니다.
     return re.sub(r"\n{3,}", "\n\n", "\n".join(clean_lines)).strip()
+
+
+# ── 한자 감지 및 한국어 재작성 ───────────────────────────────────────────────
+
+def _has_chinese(text: str) -> bool:
+    """
+    출력 결과에 중국어(한자, U+4E00-U+9FFF)가 포함되어 있는지 검사합니다.
+
+    _strip_language_noise의 라인 비율 기준(한자 4자 이상 + 80%)으로는
+    "3. 编程" 같이 한자가 2자뿐인 짧은 목록 항목을 걸러내지 못합니다.
+    최종 출력 단계에서는 한자 1자라도 있으면 재작성 대상으로 처리합니다.
+
+    chunk 중간 결과에는 적용하지 않습니다. merge 단계에서 처리되기 때문입니다.
+
+    TODO: 향후 일본어(히라가나·카타카나) 등으로 검사 범위를 넓힐 경우
+          _has_forbidden_script() 로 이름을 변경하는 것을 고려합니다.
+    """
+    return any("\u4e00" <= c <= "\u9fff" for c in text)
+
+
+def _korean_rewrite_prompt(text: str) -> str:
+    return f"""아래 텍스트에 중국어(한자) 또는 외국어가 포함되어 있습니다.
+내용의 의미를 그대로 유지하되, 모든 외국어 표현을 한국어로 바꿔 다시 작성합니다.
+
+[규칙]
+- 출력은 반드시 한국어(한글)만 사용합니다.
+- 중국어(한자)·일본어·영어를 출력하지 않습니다.
+- 원본 텍스트의 구조(문단, 목록 형식, 번호 순서 등)를 그대로 유지합니다.
+- 교정 과정에 대한 설명 없이 교정된 텍스트만 출력합니다.
+
+텍스트:
+{text}"""
+
+
+def _korean_rewrite(text: str) -> str:
+    """
+    한자가 포함된 요약 결과를 한국어만 사용하도록 재작성합니다.
+
+    _strip_language_noise 이후에도 남은 한자를 처리하기 위해 LLM을 1회 더 호출합니다.
+    단순 제거가 아닌 의미 보존 재작성이므로 num_predict는 원본과 비슷한 여유를 줍니다.
+    """
+    result = ollama.generate(_korean_rewrite_prompt(text), num_predict=700)
+    return _strip_language_noise(_clean_summary_prefix(result))
 
 
 # ── 텍스트 분할 ──────────────────────────────────────────────────────────────
@@ -395,6 +441,17 @@ def _summarize_single(text: str, steps: list[str]) -> SummarizeResponse:
     steps.append("Ollama 요청 전송")
     result = _strip_language_noise(_clean_summary_prefix(ollama.generate(_single_prompt(text))))
     steps.append("응답 수신 완료")
+    if _has_chinese(result):
+        steps.append("한자 감지 — 한국어 재작성 중")
+        try:
+            rewritten = _korean_rewrite(result)
+            if _has_chinese(rewritten):
+                steps.append("한국어 재작성 후에도 한자 잔존 — 재작성 결과 사용")
+            else:
+                steps.append("한국어 재작성 완료")
+            result = rewritten
+        except RuntimeError:
+            steps.append("한국어 재작성 실패 — 원본 결과 유지")
     steps.append("요약 생성 완료")
     return SummarizeResponse(summary=result, steps=steps)
 
@@ -487,6 +544,17 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
         # merge는 최종 요약이므로 문장 수 목표에 맞게 충분한 여유를 줍니다.
         # 9~11문장 기준 최대 ~600토큰이므로 700으로 상한합니다.
         final = _strip_language_noise(_clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts), target_sentences), num_predict=700)))
+        if _has_chinese(final):
+            steps.append("한자 감지 — 한국어 재작성 중")
+            try:
+                rewritten = _korean_rewrite(final)
+                if _has_chinese(rewritten):
+                    steps.append("한국어 재작성 후에도 한자 잔존 — 재작성 결과 사용")
+                else:
+                    steps.append("한국어 재작성 완료")
+                final = rewritten
+            except RuntimeError:
+                steps.append("한국어 재작성 실패 — 원본 결과 유지")
     except RuntimeError as e:
         steps.append("최종 통합 요약 실패")
         raise RuntimeError(f"최종 통합 요약 중 오류 발생: {e}")
