@@ -27,24 +27,26 @@ export default function FileUploadInput({ file, onFileChange }: Props) {
   return (
     <>
       <label htmlFor="fileInput" className={styles.label}>
-        파일 업로드 <span className={styles.labelSub}>(txt / pdf / docx / png / jpg)</span>
+        <input
+          id="fileInput"
+          type="file"
+          accept=".txt,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.png,.jpg,.jpeg,image/png,image/jpeg"
+          className={styles.fileInput}
+          onChange={handleInputChange}
+        />
+        {file && (
+          <div className={styles.fileInfo}>
+            <span>선택된 파일: {file.name}</span>
+            <button type="button" className={styles.clearFile} onClick={handleClear}>
+              ✕ 파일 제거
+            </button>
+          </div>
+        )}
+      </label>
+      <label htmlFor="fileInput">
+        <span className={styles.labelSub}>지원파일 : (txt / pdf / docx / png / jpg)</span>
         <span className={styles.policyHint}>파일이 선택되면 파일을 우선합니다</span>
       </label>
-      <input
-        id="fileInput"
-        type="file"
-        accept=".txt,.pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.png,.jpg,.jpeg,image/png,image/jpeg"
-        className={styles.fileInput}
-        onChange={handleInputChange}
-      />
-      {file && (
-        <div className={styles.fileInfo}>
-          <span>선택된 파일: {file.name}</span>
-          <button type="button" className={styles.clearFile} onClick={handleClear}>
-            ✕ 파일 제거
-          </button>
-        </div>
-      )}
     </>
   );
 }

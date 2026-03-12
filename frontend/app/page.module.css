@@ -48,7 +48,9 @@
 }
 
 .button {
+  display: block;
   margin-top: 12px;
+  margin-left: auto;
   padding: 10px 24px;
   font-size: 0.95rem;
   font-weight: 600;

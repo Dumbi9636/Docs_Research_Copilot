@@ -88,6 +88,7 @@ export default function Home() {
       <div className={styles.divider}></div>
 
       {/* ── 요약 버튼 ────────────────────────────────────────────────────────── */}
+      <br />
       <button
         className={styles.button}
         onClick={handleSummarize}
