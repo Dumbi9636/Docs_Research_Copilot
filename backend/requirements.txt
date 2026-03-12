@@ -6,3 +6,6 @@ pydantic-settings
 python-multipart
 pypdf
 python-docx
+pytesseract
+Pillow
+pymupdf

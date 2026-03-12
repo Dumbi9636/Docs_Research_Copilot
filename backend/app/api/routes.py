@@ -11,11 +11,11 @@ import io
 from docx import Document
 from docx.oxml.ns import qn
 from fastapi import APIRouter, HTTPException, UploadFile, File
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
 
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.services import summarizer
+from app.services.ocr_extractor import extract_text_from_image
+from app.services.pdf_extractor import extract_text_from_pdf
 
 router = APIRouter()
 
@@ -25,7 +25,7 @@ PLACEHOLDER_VALUES = {"string", "text", "example", "sample"}
 
 # 파일 업로드에서 허용하는 확장자 목록입니다.
 # 새 형식을 지원할 때 여기에 추가하고, _extract_text()에 분기를 추가합니다.
-ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx"}
+ALLOWED_EXTENSIONS = {".txt", ".pdf", ".docx", ".png", ".jpg", ".jpeg"}
 
 
 # ── 파일별 텍스트 추출 헬퍼 ──────────────────────────────────────────────────
@@ -47,46 +47,6 @@ def _read_txt(raw: bytes) -> str:
             detail="파일을 UTF-8로 읽을 수 없습니다. 파일을 UTF-8로 저장한 뒤 다시 시도해 주세요.",
         )
 
-
-def _read_pdf(raw: bytes) -> str:
-    """
-    PDF 파일 바이트에서 텍스트 레이어를 추출합니다.
-
-    지원 범위: 텍스트 레이어가 포함된 일반 PDF
-    미지원: 스캔 이미지 PDF (OCR 필요, 이번 단계에서 제외)
-
-    페이지별로 추출한 텍스트를 단락 구분자(\\n\\n)로 이어붙입니다.
-    summarizer의 chunking이 단락 단위로 분할하므로 페이지 경계를 단락으로 처리합니다.
-    """
-    try:
-        reader = PdfReader(io.BytesIO(raw))
-    except PdfReadError:
-        raise HTTPException(
-            status_code=400,
-            detail="PDF 파일을 읽을 수 없습니다. 파일이 손상되었거나 올바른 PDF 형식이 아닙니다.",
-        )
-    except Exception:
-        # 암호화된 PDF 등 pypdf가 처리하지 못하는 경우를 포괄합니다.
-        raise HTTPException(
-            status_code=400,
-            detail="PDF 파일을 처리할 수 없습니다. 암호화되지 않은 일반 PDF 파일을 업로드해 주세요.",
-        )
-
-    pages = [page.extract_text() or "" for page in reader.pages]
-    text = "\n\n".join(p for p in pages if p.strip()).strip()
-
-    if not text:
-        # 텍스트 레이어가 없는 스캔 PDF이거나 내용이 없는 경우입니다.
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "PDF에서 텍스트를 추출할 수 없습니다. "
-                "스캔된 이미지 PDF는 지원하지 않습니다. "
-                "텍스트 레이어가 포함된 PDF를 업로드해 주세요."
-            ),
-        )
-
-    return text
 
 
 def _read_docx(raw: bytes) -> str:
@@ -235,7 +195,7 @@ async def summarize_file_route(file: UploadFile = File(...)):
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail="txt, pdf, docx 파일만 업로드할 수 있습니다.",
+            detail="txt, pdf, docx, png, jpg, jpeg 파일만 업로드할 수 있습니다.",
         )
 
     pre_steps: list[str] = ["파일 수신 완료"]
@@ -247,11 +207,27 @@ async def summarize_file_route(file: UploadFile = File(...)):
         text = _read_txt(raw)
         pre_steps.append("텍스트 추출 완료")
     elif ext == ".pdf":
-        text = _read_pdf(raw)
-        pre_steps.append("PDF 텍스트 추출 완료")
-    else:  # .docx
+        try:
+            text, pdf_steps = extract_text_from_pdf(raw)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        pre_steps.extend(pdf_steps)
+    elif ext == ".docx":
         text = _read_docx(raw)
         pre_steps.append("Word 텍스트 추출 완료")
+    else:  # .png / .jpg / .jpeg
+        try:
+            text = extract_text_from_image(raw)
+        except RuntimeError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        pre_steps.append("이미지 OCR 추출 완료")
+        # ── OCR 원문 디버그 ───────────────────────────────────────────────────
+        # OCR 품질 확인용 임시 로그입니다. 서버 콘솔과 steps 양쪽에 남깁니다.
+        # 인식 결과가 기대와 다를 때 이 출력으로 전처리/psm 튜닝 방향을 잡습니다.
+        # 품질 확인 후 제거하거나 로그 레벨로 격하해도 됩니다.
+        _ocr_preview = text[:300].replace("\n", " ↵ ")
+        print(f"[OCR RAW] {_ocr_preview}")
+        pre_steps.append(f"[OCR 원문 미리보기] {_ocr_preview}")
 
     # ── 텍스트 내용 검증 ─────────────────────────────────────────────────────
     # 파일은 선택됐지만 내용이 없거나 너무 짧은 경우를 걸러냅니다.

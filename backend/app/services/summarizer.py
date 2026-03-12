@@ -221,31 +221,116 @@ def _strip_language_noise(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(clean_lines)).strip()
 
 
-# ── 한자 감지 및 한국어 재작성 ───────────────────────────────────────────────
+# ── 최종 출력 금지 표현 감지 및 한국어 재작성 ────────────────────────────────
+#
+# 정책:
+#   입력 원문 언어는 제한하지 않습니다. 여기의 모든 함수는 최종 출력에만 적용합니다.
+#
+#   금지 기준 (두 가지 OR):
+#     1. CJK 문자 — 한자(U+4E00-U+9FFF), 히라가나(U+3040-U+309F), 카타카나(U+30A0-U+30FF)
+#        1자라도 포함되면 즉시 재작성 대상입니다.
+#     2. 영어 구절 — 2개 이상 연속 영어 단어 중 허용 whitelist에 없는 단어가 하나라도 있으면 금지입니다.
+#        허용 예외: AI·OCR·PDF 같은 기술 약어/고유명사 (아래 _ALLOWED_ENGLISH 참조)
+#        금지 예시: "various activities", "is summarized as follows"
 
-def _has_chinese(text: str) -> bool:
+# 최종 출력에서 허용하는 영어 토큰 목록입니다.
+# 기술 약어·고유명사·모델명처럼 한국어 문장에 자연스럽게 섞이는 표현을 등록합니다.
+# 비교는 대문자 정규화로 수행하므로 대소문자를 구분하지 않습니다.
+_ALLOWED_ENGLISH: frozenset[str] = frozenset({
+    # 범용 IT 약어
+    "AI", "ML", "DL", "NLP", "LLM", "GPT", "API", "UI", "UX",
+    "URL", "HTTP", "HTTPS", "HTML", "CSS", "JS", "TS",
+    "JSON", "CSV", "XML", "SQL", "DB", "OS", "PC", "IT",
+    # 하드웨어
+    "CPU", "GPU", "RAM", "SSD", "HDD", "USB",
+    # 이 프로젝트 직접 관련
+    "OCR", "PDF", "TXT", "DOCX", "PNG", "JPG", "JPEG",
+    # 프레임워크·툴·모델명
+    "FASTAPI", "PYTHON", "TESSERACT", "DOCKER", "GITHUB", "NOTION",
+    "QWEN", "CHATGPT", "CLAUDE", "OLLAMA", "OPENAI", "GEMINI",
+    # 플랫폼·서비스 고유명사
+    "GOOGLE", "NAVER", "KAKAO", "APPLE", "MICROSOFT", "AMAZON", "META",
+    "SLACK", "FIGMA", "JIRA", "CONFLUENCE", "NOTION",
+    # 버전 표기에 자주 붙는 접두어 (GPT-4, Claude-3 등)
+    "V", "VER",
+})
+
+
+def _has_cjk(text: str) -> bool:
     """
-    출력 결과에 중국어(한자, U+4E00-U+9FFF)가 포함되어 있는지 검사합니다.
+    최종 출력에 중국어·일본어 문자가 포함되어 있는지 검사합니다.
 
-    _strip_language_noise의 라인 비율 기준(한자 4자 이상 + 80%)으로는
-    "3. 编程" 같이 한자가 2자뿐인 짧은 목록 항목을 걸러내지 못합니다.
-    최종 출력 단계에서는 한자 1자라도 있으면 재작성 대상으로 처리합니다.
+    검사 범위:
+      - 한자       U+4E00-U+9FFF  (중국어 간체·번체, 일본어 한자 공통)
+      - 히라가나   U+3040-U+309F
+      - 카타카나   U+30A0-U+30FF
 
-    chunk 중간 결과에는 적용하지 않습니다. merge 단계에서 처리되기 때문입니다.
-
-    TODO: 향후 일본어(히라가나·카타카나) 등으로 검사 범위를 넓힐 경우
-          _has_forbidden_script() 로 이름을 변경하는 것을 고려합니다.
+    1자라도 발견되면 True를 반환합니다.
+    chunk 중간 결과에는 적용하지 않습니다. merge 이후 최종 결과에만 씁니다.
     """
-    return any("\u4e00" <= c <= "\u9fff" for c in text)
+    for c in text:
+        cp = ord(c)
+        if (0x4E00 <= cp <= 0x9FFF   # 한자
+                or 0x3040 <= cp <= 0x309F  # 히라가나
+                or 0x30A0 <= cp <= 0x30FF):  # 카타카나
+            return True
+    return False
+
+
+def _has_forbidden_english(text: str) -> bool:
+    """
+    최종 출력에 허용되지 않는 영어 구절이 포함되어 있는지 검사합니다.
+
+    감지 기준:
+      - 2개 이상 연속 영어 단어로 이루어진 구절을 찾습니다.
+      - 그 구절에 _ALLOWED_ENGLISH에 없는 단어가 하나라도 있으면 금지 구절로 판정합니다.
+
+    허용 예시: "AI OCR", "CPU GPU", "FastAPI PDF"  ← 모두 whitelist
+    금지 예시: "various activities", "AI processing", "is summarized"
+
+    단독 영어 단어(구절 아님)는 검사하지 않습니다.
+    whitelist에 없는 단어 하나가 한국어 문장에 섞인 경우는 이 함수가 잡지 않으며,
+    프롬프트 규칙으로 억제합니다.
+    """
+    # 2개 이상 연속한 영어 토큰을 찾습니다. 하이픈 포함 단어(state-of-the-art)도 1토큰으로 처리합니다.
+    sequences = re.findall(r"[A-Za-z][A-Za-z0-9\-]*(?:\s+[A-Za-z][A-Za-z0-9\-]*)+", text)
+    for seq in sequences:
+        words = seq.split()
+        if any(w.upper() not in _ALLOWED_ENGLISH for w in words):
+            return True
+    return False
+
+
+def _has_forbidden_output(text: str) -> bool:
+    """
+    최종 출력에 금지된 언어 표현이 포함되어 있는지 검사합니다.
+
+    _has_cjk() 또는 _has_forbidden_english() 중 하나라도 True이면 재작성 대상입니다.
+    호출 지점(_summarize_single, _summarize_chunked)에서 이 함수만 사용합니다.
+
+    디버깅: 감지 원인은 서버 콘솔에 출력됩니다.
+      [FORBIDDEN:CJK]     — 한자·히라가나·카타카나 감지
+      [FORBIDDEN:ENGLISH] — 허용 whitelist 외 영어 구절 감지
+    """
+    cjk = _has_cjk(text)
+    eng = _has_forbidden_english(text)
+    if cjk:
+        print(f"[FORBIDDEN:CJK] {text[:120].replace(chr(10), ' ')!r}")
+    if eng:
+        print(f"[FORBIDDEN:ENGLISH] {text[:120].replace(chr(10), ' ')!r}")
+    return cjk or eng
 
 
 def _korean_rewrite_prompt(text: str) -> str:
-    return f"""아래 텍스트에 중국어(한자) 또는 외국어가 포함되어 있습니다.
-내용의 의미를 그대로 유지하되, 모든 외국어 표현을 한국어로 바꿔 다시 작성합니다.
+    return f"""아래 텍스트에 중국어(한자), 일본어, 또는 허용되지 않는 영어 표현이 포함되어 있습니다.
+내용의 의미를 그대로 유지하되, 금지된 표현을 한국어로 바꿔 다시 작성합니다.
 
 [규칙]
-- 출력은 반드시 한국어(한글)만 사용합니다.
-- 중국어(한자)·일본어·영어를 출력하지 않습니다.
+- 출력은 반드시 한국어(한글)를 기본으로 합니다.
+- 중국어(한자)·일본어를 출력하지 않습니다.
+- 영어 문장·구절은 한국어로 바꿉니다.
+  예: "various activities" → "다양한 활동", "is summarized as" → "요약하면"
+- AI, OCR, PDF, CPU, GPU 같은 기술 약어·고유명사는 그대로 유지합니다.
 - 원본 텍스트의 구조(문단, 목록 형식, 번호 순서 등)를 그대로 유지합니다.
 - 교정 과정에 대한 설명 없이 교정된 텍스트만 출력합니다.
 
@@ -255,10 +340,10 @@ def _korean_rewrite_prompt(text: str) -> str:
 
 def _korean_rewrite(text: str) -> str:
     """
-    한자가 포함된 요약 결과를 한국어만 사용하도록 재작성합니다.
+    금지 표현이 포함된 요약 결과를 한국어 중심으로 재작성합니다.
 
-    _strip_language_noise 이후에도 남은 한자를 처리하기 위해 LLM을 1회 더 호출합니다.
-    단순 제거가 아닌 의미 보존 재작성이므로 num_predict는 원본과 비슷한 여유를 줍니다.
+    _strip_language_noise + _has_forbidden_output 이후에도 남은 표현을 처리하기 위해
+    LLM을 1회 더 호출합니다. 단순 제거가 아닌 의미 보존 재작성입니다.
     """
     result = ollama.generate(_korean_rewrite_prompt(text), num_predict=700)
     return _strip_language_noise(_clean_summary_prefix(result))
@@ -441,12 +526,12 @@ def _summarize_single(text: str, steps: list[str]) -> SummarizeResponse:
     steps.append("Ollama 요청 전송")
     result = _strip_language_noise(_clean_summary_prefix(ollama.generate(_single_prompt(text))))
     steps.append("응답 수신 완료")
-    if _has_chinese(result):
-        steps.append("한자 감지 — 한국어 재작성 중")
+    if _has_forbidden_output(result):
+        steps.append("금지 표현 감지 — 한국어 재작성 중")
         try:
             rewritten = _korean_rewrite(result)
-            if _has_chinese(rewritten):
-                steps.append("한국어 재작성 후에도 한자 잔존 — 재작성 결과 사용")
+            if _has_forbidden_output(rewritten):
+                steps.append("한국어 재작성 후에도 금지 표현 잔존 — 재작성 결과 사용")
             else:
                 steps.append("한국어 재작성 완료")
             result = rewritten
@@ -544,12 +629,12 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
         # merge는 최종 요약이므로 문장 수 목표에 맞게 충분한 여유를 줍니다.
         # 9~11문장 기준 최대 ~600토큰이므로 700으로 상한합니다.
         final = _strip_language_noise(_clean_summary_prefix(ollama.generate(_merge_prompt("\n".join(bullet_parts), target_sentences), num_predict=700)))
-        if _has_chinese(final):
-            steps.append("한자 감지 — 한국어 재작성 중")
+        if _has_forbidden_output(final):
+            steps.append("금지 표현 감지 — 한국어 재작성 중")
             try:
                 rewritten = _korean_rewrite(final)
-                if _has_chinese(rewritten):
-                    steps.append("한국어 재작성 후에도 한자 잔존 — 재작성 결과 사용")
+                if _has_forbidden_output(rewritten):
+                    steps.append("한국어 재작성 후에도 금지 표현 잔존 — 재작성 결과 사용")
                 else:
                     steps.append("한국어 재작성 완료")
                 final = rewritten

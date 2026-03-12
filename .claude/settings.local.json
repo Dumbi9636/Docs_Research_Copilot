@@ -7,7 +7,9 @@
       "Bash(.venv/Scripts/pip install:*)",
       "Bash(.venv/Scripts/python:*)",
       "Bash(curl:*)",
-      "Bash(kill 304:*)"
+      "Bash(kill 304:*)",
+      "Bash(cat C:/playground/projects/docs_research_copilot/backend/requirements.txt 2>/dev/null || find C:/playground/projects/docs_research_copilot/backend -name \"requirements*.txt\" -o -name \"pyproject.toml\" | head -5)",
+      "Bash(\"C:/Program Files/Tesseract-OCR/tesseract.exe\" --version 2>&1)"
     ]
   }
 }
