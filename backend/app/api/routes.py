@@ -7,13 +7,17 @@
 # 비즈니스 로직은 summarizer.py에 작성되어 있습니다.
 
 import io
+from datetime import datetime
+from urllib.parse import quote
 
 from docx import Document
 from docx.oxml.ns import qn
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import Response
 
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
-from app.services import summarizer
+from app.schemas.export import ExportRequest
+from app.services import summarizer, export_service
 from app.services.ocr_extractor import extract_text_from_image
 from app.services.pdf_extractor import extract_text_from_pdf
 
@@ -248,3 +252,34 @@ async def summarize_file_route(file: UploadFile = File(...)):
 
     # 파일 처리 단계를 요약 단계 앞에 붙여 하나의 흐름으로 반환합니다.
     return SummarizeResponse(summary=result.summary, steps=pre_steps + result.steps)
+
+
+@router.post("/export")
+def export_route(request: ExportRequest):
+    """
+    요약 결과를 지정한 형식의 파일로 변환해 반환합니다.
+
+    요청: { summary, format, source_filename }
+    응답: binary 파일 (Content-Disposition: attachment)
+
+    현재 지원 형식: txt / docx / pdf
+    새 형식 추가 방법: export_service._EXPORTERS에 항목 추가 후 exporter 모듈 작성
+    """
+    try:
+        file_bytes, media_type, ext = export_service.export(
+            request.summary, request.format, request.source_filename
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    date_str = datetime.now().strftime("%Y%m%d")
+    filename = f"요약결과_{date_str}.{ext}"
+
+    return Response(
+        content=file_bytes,
+        media_type=media_type,
+        # RFC 5987 방식 — 한글 파일명이 브라우저에서 깨지지 않습니다.
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )

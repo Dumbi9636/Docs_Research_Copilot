@@ -48,3 +48,36 @@ export async function summarizeFile(file: File): Promise<SummarizeResult> {
   if (!res.ok) throw new Error(data.detail ?? "알 수 없는 오류가 발생했습니다.");
   return data;
 }
+
+export type ExportFormat = "txt" | "docx" | "pdf";
+
+export async function exportSummary(
+  summary: string,
+  format: ExportFormat,
+  sourceFilename: string
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/export`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ summary, format, source_filename: sourceFilename }),
+    });
+  } catch {
+    throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
+  }
+
+  // 에러 응답은 JSON, 성공 응답은 binary입니다.
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.detail ?? "다운로드 중 오류가 발생했습니다.");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `요약결과_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.${format}`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
