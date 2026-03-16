@@ -1,84 +1,328 @@
-.container {
-  max-width: 720px;
-  margin: 60px auto;
-  padding: 0 20px;
+/* ══════════════════════════════════════════════════════════════════════════════
+   전역 레이아웃
+══════════════════════════════════════════════════════════════════════════════ */
+
+.pageWrapper {
+  min-height: 100vh;
+  background: #f0f2f7;
+  font-family: inherit;
 }
 
-.title {
-  font-size: 1.8rem;
-  font-weight: 700;
-  margin-bottom: 8px;
+/* ══════════════════════════════════════════════════════════════════════════════
+   Header
+══════════════════════════════════════════════════════════════════════════════ */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
 }
 
-.subtitle {
+.headerInner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.headerLogo {
   font-size: 1rem;
-  color: #666;
-  margin-bottom: 32px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.3px;
 }
+
+.headerLogo span {
+  color: #4f6ef7;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerBtn {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.headerBtnGhost {
+  background: transparent;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.headerBtnGhost:hover {
+  background: #f9fafb;
+}
+
+.headerBtnPrimary {
+  background: #4f6ef7;
+  color: #ffffff;
+  border: 1px solid transparent;
+}
+
+.headerBtnPrimary:hover {
+  background: #3b5bdb;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   Hero 섹션
+══════════════════════════════════════════════════════════════════════════════ */
+
+.hero {
+  text-align: center;
+  padding: 64px 24px 40px;
+}
+
+.heroTitle {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #111827;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+  margin: 0 0 12px;
+}
+
+.heroTitle span {
+  color: #4f6ef7;
+}
+
+.heroDesc {
+  font-size: 1rem;
+  color: #6b7280;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.heroBadges {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #4f6ef7;
+  background: #eef1fe;
+  border-radius: 99px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   메인 콘텐츠 래퍼
+══════════════════════════════════════════════════════════════════════════════ */
+
+.contentArea {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   메인 카드 (입력 / 요약 / 결과)
+══════════════════════════════════════════════════════════════════════════════ */
+
+.mainCard {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  padding: 32px;
+}
+
+/* ── 직접 입력 ──────────────────────────────────────────────────────────────── */
 
 .label {
   display: block;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  margin-bottom: 8px;
+  color: #374151;
+  margin-bottom: 6px;
 }
 
-/* 레이블 옆의 보조 텍스트 (예: "txt / pdf") */
 .labelSub {
   font-size: 0.8rem;
   font-weight: 400;
-  color: #888;
+  color: #9ca3af;
   margin-left: 4px;
 }
 
 .textarea {
   width: 100%;
-  height: 200px;
-  padding: 12px;
-  font-size: 0.95rem;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  resize: vertical;
+  height: 160px;
+  padding: 12px 14px;
+  font-size: 0.9rem;
   font-family: inherit;
+  color: #111827;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s;
 }
 
 .textarea:focus {
   outline: none;
-  border-color: #555;
+  border-color: #4f6ef7;
+  background: #ffffff;
 }
 
-.button {
+.textareaDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ── 구분선 ─────────────────────────────────────────────────────────────────── */
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: #d1d5db;
+  font-size: 0.8rem;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+/* ── 파일 업로드 ─────────────────────────────────────────────────────────────── */
+
+.uploadZone {
   display: block;
-  margin-top: 12px;
-  margin-left: auto;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  background: #222;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 24px 20px;
+  text-align: center;
+  background: #f9fafb;
   cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.button:disabled {
-  background: #999;
-  cursor: not-allowed;
+.uploadZone:hover {
+  border-color: #4f6ef7;
+  background: #f5f7ff;
 }
 
-/* 요약 버튼과 취소 버튼을 오른쪽 정렬로 나란히 배치합니다. */
+.uploadZoneActive {
+  border-color: #4f6ef7;
+  background: #f5f7ff;
+}
+
+.uploadIcon {
+  font-size: 1.8rem;
+  margin-bottom: 8px;
+}
+
+.uploadMainText {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 4px;
+}
+
+.uploadSubText {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.fileInfo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 6px 14px;
+  background: #eef1fe;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.clearFile {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #6b7280;
+  padding: 0;
+  line-height: 1;
+}
+
+.clearFile:hover {
+  color: #ef4444;
+}
+
+.policyHint {
+  display: none;
+}
+
+/* ── 버튼 행 ─────────────────────────────────────────────────────────────────── */
+
 .buttonRow {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 20px;
 }
 
-/* buttonRow 안에서는 button 자체의 margin을 무효화합니다. */
-.buttonRow .button {
-  margin-top: 0;
-  margin-left: 0;
+.button {
+  padding: 10px 28px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  background: #4f6ef7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.button:hover:not(:disabled) {
+  background: #3b5bdb;
+}
+
+.button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 .cancelButton {
@@ -86,197 +330,228 @@
   font-size: 0.95rem;
   font-weight: 600;
   font-family: inherit;
-  background: #fff;
-  color: #555;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  background: #ffffff;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .cancelButton:hover {
-  background: #f5f5f5;
+  background: #f9fafb;
+}
+
+/* ── 메시지 박스 ─────────────────────────────────────────────────────────────── */
+
+.error {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #fff5f5;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  color: #b91c1c;
+  font-size: 0.875rem;
 }
 
 .cancelledMessage {
   margin-top: 12px;
   padding: 12px 16px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  color: #555;
-  font-size: 0.9rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 
+/* ── 결과 영역 구분 ─────────────────────────────────────────────────────────── */
+
+.resultDivider {
+  height: 1px;
+  background: #f3f4f6;
+  margin: 24px 0;
+}
+
+/* ── 요약 결과 ──────────────────────────────────────────────────────────────── */
+
 .resultBox {
-  margin-top: 32px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  padding: 20px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
   white-space: pre-wrap;
-  font-size: 0.95rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: #1f2937;
 }
 
 .resultLabel {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4f6ef7;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
 }
 
-.error {
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: #fff3f3;
-  border: 1px solid #f5a5a5;
-  border-radius: 6px;
-  color: #c0392b;
-  font-size: 0.9rem;
-}
+/* ── Steps ─────────────────────────────────────────────────────────────────── */
 
 .stepsList {
   margin-top: 16px;
-  padding: 12px 16px;
-  background: #f8f8f8;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  padding: 14px 18px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
   list-style: none;
 }
 
 .stepsList li {
-  font-size: 0.85rem;
-  color: #555;
+  font-size: 0.82rem;
+  color: #6b7280;
   padding: 3px 0;
 }
 
 .stepsList li::before {
   content: "✓ ";
-  color: #4caf50;
+  color: #4f6ef7;
   font-weight: 700;
 }
 
-/* ── 파일 업로드 영역 ──────────────────────────────────────────────────────── */
-
-/* "또는" 구분선: 직접 입력과 파일 업로드 영역을 시각적으로 분리합니다. */
-.divider {
-  text-align: center;
-  margin: 20px 0;
-  color: #bbb;
-  font-size: 0.85rem;
-  position: relative;
-}
-
-.divider::before,
-.divider::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  width: 45%;
-  height: 1px;
-  background: #e0e0e0;
-}
-
-.divider::before {
-  left: 0;
-}
-
-.divider::after {
-  right: 0;
-}
-
-/* label 오른쪽에 인라인으로 표시되는 정책 안내 텍스트 */
-.policyHint {
-  font-size: 0.8rem;
-  color: #999;
-  font-weight: 400;
-  margin-left: 8px;
-}
-
-.fileInput {
-  display: block;
-  margin-top: 4px;
-  font-size: 0.9rem;
-  color: #444;
-}
-
-/* 파일이 선택됐을 때 표시되는 파일명 + 제거 버튼 행 */
-.fileInfo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #555;
-}
-
-.clearFile {
-  background: none;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 2px 8px;
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.clearFile:hover {
-  background: #f5f5f5;
-}
-
-/* 파일이 선택된 경우 textarea를 흐리게 표시해 "파일 우선" 정책을 시각화합니다. */
-.textareaDisabled {
-  opacity: 0.35;
-  pointer-events: none;
-}
-
-/* ── 다운로드 영역 ─────────────────────────────────────────────────────────── */
+/* ── 다운로드 ────────────────────────────────────────────────────────────────── */
 
 .downloadSection {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 16px;
   flex-wrap: wrap;
 }
 
 .downloadSelect {
   padding: 8px 12px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-family: inherit;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: #fff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
   cursor: pointer;
 }
 
 .downloadSelect:focus {
   outline: none;
-  border-color: #555;
+  border-color: #4f6ef7;
 }
 
 .downloadSelect:disabled {
-  cursor: not-allowed;
   opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .downloadButton {
   padding: 8px 20px;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
-  background: #fff;
-  color: #222;
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  background: #ffffff;
+  color: #4f6ef7;
+  border: 1px solid #4f6ef7;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .downloadButton:hover:not(:disabled) {
-  background: #f5f5f5;
+  background: #f5f7ff;
 }
 
 .downloadButton:disabled {
-  color: #999;
+  color: #9ca3af;
+  border-color: #d1d5db;
   cursor: not-allowed;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   카테고리 카드 섹션
+══════════════════════════════════════════════════════════════════════════════ */
+
+.categorySection {
+  margin-top: 48px;
+}
+
+.categorySectionTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 16px;
+}
+
+.categoryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.categoryCard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: default;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.categoryCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.categoryCardActive {
+  cursor: pointer;
+}
+
+.categoryCardDisabled {
+  opacity: 0.55;
+}
+
+.categoryCardDisabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.categoryIcon {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
+}
+
+.categoryCardName {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 4px;
+}
+
+.categoryCardDesc {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0 0 10px;
+  line-height: 1.4;
+}
+
+.categoryCardBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 99px;
+}
+
+.badgeActive {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.badgeSoon {
+  background: #f3f4f6;
+  color: #9ca3af;
 }

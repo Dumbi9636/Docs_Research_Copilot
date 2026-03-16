@@ -8,6 +8,7 @@
 
 import io
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 from docx import Document
@@ -22,6 +23,23 @@ from app.services.ocr_extractor import extract_text_from_image
 from app.services.pdf_extractor import extract_text_from_pdf
 
 router = APIRouter()
+
+
+def _build_export_filename(source_filename: str, ext: str) -> str:
+    """
+    다운로드 파일명을 생성합니다.
+
+    source_filename이 있으면:  "{base}_요약결과_{date}.{ext}"
+    source_filename이 없으면:  "요약결과_{date}.{ext}"
+
+    base는 원본 파일명의 마지막 확장자만 제거합니다.
+    예: "report.final.v2.docx" → "report.final.v2"
+    """
+    date_str = datetime.now().strftime("%Y%m%d")
+    if source_filename:
+        base = Path(source_filename).stem  # 마지막 확장자 하나만 제거
+        return f"{base}_요약결과_{date_str}.{ext}"
+    return f"요약결과_{date_str}.{ext}"
 
 # Swagger UI나 테스트 도구의 기본값("string", "example" 등)처럼
 # 의미 없는 입력을 차단합니다.
@@ -274,8 +292,7 @@ def export_route(request: ExportRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    date_str = datetime.now().strftime("%Y%m%d")
-    filename = f"요약결과_{date_str}.{ext}"
+    filename = _build_export_filename(request.source_filename, ext)
 
     return Response(
         content=file_bytes,

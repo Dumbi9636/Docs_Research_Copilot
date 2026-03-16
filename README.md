@@ -1,6 +1,7 @@
 # Docs Research Copilot
 
 문서 또는 이미지 파일을 업로드하면 텍스트를 추출하고, Ollama 기반 로컬 LLM이 핵심 내용을 **한국어로 요약**해 주는 서비스입니다.
+요약 결과는 txt / docx / pdf 형식으로 다운로드할 수 있습니다.
 
 ---
 
@@ -37,7 +38,6 @@
 - Tesseract OCR (kor+eng 언어팩)
 - 전처리 파이프라인: 그레이스케일 → 소형 이미지 확대 → 오토 컨트라스트 → 이진화
 - Tesseract 옵션: `--psm 6 --oem 3`
-- OCR 원문 미리보기를 처리 단계(steps)와 서버 로그에서 확인 가능
 
 ### 요약 파이프라인
 
@@ -46,9 +46,28 @@
 - **단일 요약**: 짧은 문서를 LLM 1회 호출로 직접 요약
 - **청킹 요약**: 긴 문서를 chunk로 분할 → 각 chunk 중간 요약 → 최종 통합 요약
 
+### 요약 결과 다운로드
+
+요약이 완료되면 결과를 파일로 저장할 수 있습니다.
+
+- 지원 출력 형식: **txt / docx / pdf**
+- 다운로드 UI: 형식 선택(드롭다운) + 다운로드 버튼
+- 파일명 규칙:
+  - 원본 파일 업로드 시: `원본파일명_요약결과_YYYYMMDD.확장자`
+  - 텍스트 직접 입력 시: `요약결과_YYYYMMDD.확장자`
+- PDF 출력은 한글 폰트(맑은 고딕) 기반으로 생성
+
+### 요약 중 취소
+
+요약이 오래 걸리는 경우 진행 중인 요청을 취소할 수 있습니다.
+
+- 로딩 중에만 취소 버튼 표시
+- 취소 시 요약 결과를 초기화하고 안내 메시지 표시
+- AbortController 기반 프론트 요청 취소 (1차 구현)
+
 ### 처리 단계(steps) 제공
 
-요약 결과와 함께 파일 수신부터 최종 요약까지 각 처리 단계를 사용자에게 표시합니다.
+요약 결과와 함께 파일 수신부터 최종 요약까지 각 처리 단계를 표시합니다.
 
 ```
 파일 수신 완료
@@ -57,7 +76,6 @@ PDF 페이지별 혼합 추출 시작 (3페이지)
 PDF 추출 완료 (텍스트 2페이지, OCR 1페이지)
 입력 검증 완료
 문서 분할 완료 (4개 chunk)
-chunk 병렬 요약 시작 (4개, 동시 1개)
 chunk 1/4 요약 완료
 ...
 최종 요약 생성 완료
@@ -65,7 +83,7 @@ chunk 1/4 요약 완료
 
 ### 한국어 출력 안정성
 
-`qwen2.5:7b` 사용 시 요약 출력에 중국어·한자가 혼입되는 문제에 대응하는 보정 구조가 포함되어 있습니다.
+`qwen2.5:7b` 사용 시 중국어·한자 혼입 문제에 대응하는 보정 구조가 포함되어 있습니다.
 
 - 프롬프트에 한국어 전용 출력 규칙 강화
 - 최종 출력에서 한자·히라가나·카타카나 감지 시 한국어로 재작성
@@ -88,6 +106,8 @@ pdf   ──→ 페이지별: 텍스트 레이어 or OCR fallback  ┘
            한국어 출력 보정
                    ↓
            { summary, steps }
+                   ↓
+           export (txt / docx / pdf 선택 다운로드)
 ```
 
 ---
@@ -97,11 +117,12 @@ pdf   ──→ 페이지별: 텍스트 레이어 or OCR fallback  ┘
 | 구분 | 사용 기술 |
 |---|---|
 | 백엔드 | Python 3.11+, FastAPI |
-| 프론트엔드 | Next.js, TypeScript |
+| 프론트엔드 | Next.js 16, React 19, TypeScript 5 |
 | LLM | Ollama (`qwen2.5:7b`) |
 | OCR | Tesseract OCR, pytesseract, Pillow |
 | PDF 처리 | pypdf, pymupdf |
 | Word 처리 | python-docx |
+| PDF 생성 | fpdf2 |
 
 ---
 
@@ -112,28 +133,35 @@ docs_research_copilot/
 ├── backend/
 │   ├── app/
 │   │   ├── api/
-│   │   │   └── routes.py            # 업로드 엔드포인트, 파일 형식 분기
+│   │   │   └── routes.py            # 업로드·export 엔드포인트, 파일 형식 분기
 │   │   ├── clients/
 │   │   │   └── ollama.py            # Ollama HTTP 호출
 │   │   ├── core/
 │   │   │   └── config.py            # 환경설정
 │   │   ├── schemas/
-│   │   │   └── summarize.py         # 요청·응답 스키마
+│   │   │   ├── summarize.py         # 요약 요청·응답 스키마
+│   │   │   └── export.py            # export 요청 스키마
 │   │   └── services/
 │   │       ├── summarizer.py        # 요약 파이프라인 + 한국어 출력 보정
 │   │       ├── pdf_extractor.py     # PDF 텍스트 추출 + 페이지 단위 OCR hybrid
-│   │       └── ocr_extractor.py     # 이미지 OCR (전처리 포함)
+│   │       ├── ocr_extractor.py     # 이미지 OCR (전처리 포함)
+│   │       ├── export_service.py    # export 형식 분기
+│   │       └── exporters/
+│   │           ├── txt_exporter.py
+│   │           ├── docx_exporter.py
+│   │           └── pdf_exporter.py
 │   ├── requirements.txt
 │   └── .env                         # 환경변수 (git 미포함)
 │
 └── frontend/
     └── app/
         ├── components/
-        │   ├── FileUploadInput.tsx   # 파일 선택 UI
-        │   └── SummaryResult.tsx     # 요약 결과 및 steps 표시
+        │   ├── FileUploadInput.tsx   # 파일 업로드 존 UI
+        │   ├── SummaryResult.tsx     # 요약 결과 및 steps 표시
+        │   └── DownloadSection.tsx   # 다운로드 형식 선택 + 버튼
         ├── lib/
         │   └── api.ts               # 백엔드 API 호출
-        └── page.tsx                 # 메인 페이지
+        └── page.tsx                 # 메인 페이지 (Header / Hero / MainCard / 기능 카드)
 ```
 
 ---
@@ -175,6 +203,8 @@ SUMMARIZE_MAX_WORKERS=1
 
 > 로컬 환경에서는 `SUMMARIZE_MAX_WORKERS=1`이 가장 안정적입니다.
 
+> PDF 다운로드는 Windows 기본 폰트 맑은 고딕(`C:/Windows/Fonts/malgun.ttf`)을 사용합니다. 해당 경로에 폰트가 없으면 PDF 생성 시 오류가 발생합니다.
+
 ### 프론트엔드
 
 ```bash
@@ -198,6 +228,8 @@ npm run dev
 | 텍스트 상자·도형 | docx / PDF 모두 미지원 |
 | 영어 허용 정책 | whitelist 기반 — 미등록 고유명사가 금지 표현으로 오판될 수 있음 |
 | 모델 의존성 | `qwen2.5:7b` 기준 튜닝 — 다른 모델에서는 출력 안정성이 다를 수 있음 |
+| 요약 취소 | 브라우저 요청은 취소되지만 서버의 Ollama 추론은 완료될 때까지 계속 진행됨 |
+| PDF 폰트 | 맑은 고딕 경로 고정 — Windows 외 환경에서 추가 설정 필요 |
 
 ---
 
@@ -208,3 +240,4 @@ npm run dev
 3. **OCR 품질 개선** — 적응형 이진화, 노이즈 제거 등 전처리 강화
 4. **영어 허용 정책 고도화** — 단순 whitelist를 넘어 문맥 기반 판단 검토
 5. **LLM 교체 검토** — 로컬 모델 한계 확인 시 OpenAI / Gemini 등 API 모델 비교
+6. **로그인 / 작업 기록** — DB 도입 후 사용자별 요약 이력 저장 및 재사용

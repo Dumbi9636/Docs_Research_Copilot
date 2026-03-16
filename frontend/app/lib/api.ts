@@ -88,7 +88,25 @@ export async function exportSummary(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `요약결과_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.${format}`;
+  a.download = _buildExportFilename(sourceFilename, format);
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * 백엔드 파일명 정책과 동일한 규칙으로 다운로드 파일명을 생성합니다.
+ *
+ * sourceFilename 있음: "{base}_요약결과_{date}.{format}"
+ * sourceFilename 없음: "요약결과_{date}.{format}"
+ *
+ * base는 원본 파일명의 마지막 확장자만 제거합니다.
+ * 예: "report.final.v2.docx" → "report.final.v2"
+ */
+function _buildExportFilename(sourceFilename: string, format: ExportFormat): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  if (sourceFilename) {
+    const base = sourceFilename.replace(/\.[^.]+$/, ""); // 마지막 확장자 하나만 제거
+    return `${base}_요약결과_${date}.${format}`;
+  }
+  return `요약결과_${date}.${format}`;
 }
