@@ -66,6 +66,47 @@
   cursor: not-allowed;
 }
 
+/* 요약 버튼과 취소 버튼을 오른쪽 정렬로 나란히 배치합니다. */
+.buttonRow {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* buttonRow 안에서는 button 자체의 margin을 무효화합니다. */
+.buttonRow .button {
+  margin-top: 0;
+  margin-left: 0;
+}
+
+.cancelButton {
+  padding: 10px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  background: #fff;
+  color: #555;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.cancelButton:hover {
+  background: #f5f5f5;
+}
+
+.cancelledMessage {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  color: #555;
+  font-size: 0.9rem;
+}
+
 .resultBox {
   margin-top: 32px;
   padding: 16px;

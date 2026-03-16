@@ -11,15 +11,21 @@ export interface SummarizeResult {
   steps: string[];
 }
 
-export async function summarizeText(text: string): Promise<SummarizeResult> {
+export async function summarizeText(
+  text: string,
+  options?: { signal?: AbortSignal }
+): Promise<SummarizeResult> {
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}/summarize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
+      signal: options?.signal,
     });
-  } catch {
+  } catch (e) {
+    // AbortError는 취소 신호이므로 상위(page.tsx)로 그대로 전달합니다.
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     // fetch 자체가 실패하면 서버가 꺼져 있거나 CORS 문제입니다.
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
@@ -29,7 +35,10 @@ export async function summarizeText(text: string): Promise<SummarizeResult> {
   return data;
 }
 
-export async function summarizeFile(file: File): Promise<SummarizeResult> {
+export async function summarizeFile(
+  file: File,
+  options?: { signal?: AbortSignal }
+): Promise<SummarizeResult> {
   // Content-Type 헤더는 FormData 사용 시 브라우저가 자동으로 설정합니다.
   const formData = new FormData();
   formData.append("file", file);
@@ -39,8 +48,10 @@ export async function summarizeFile(file: File): Promise<SummarizeResult> {
     res = await fetch(`${BACKEND_URL}/summarize/file`, {
       method: "POST",
       body: formData,
+      signal: options?.signal,
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
 
