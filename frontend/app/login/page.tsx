@@ -37,7 +37,7 @@ export default function LoginPage() {
       <main className={styles.main}>
         <div className={styles.card}>
           <h1 className={styles.title}>로그인</h1>
-          <p className={styles.subtitle}>계정에 로그인하여 요약 기능을 이용하세요.</p>
+          <p className={styles.subtitle}>가입 시 등록한 이메일과 비밀번호로 로그인하세요.</p>
 
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.field}>
