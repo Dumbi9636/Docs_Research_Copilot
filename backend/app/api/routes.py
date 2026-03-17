@@ -7,15 +7,22 @@
 # 비즈니스 로직은 summarizer.py에 작성되어 있습니다.
 
 import io
+import time
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
 from docx import Document
 from docx.oxml.ns import qn
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
+from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.core.dependencies import get_current_user
+from app.db.models.user import User
+from app.db.session import get_db
+from app.repositories import summary_repository
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.schemas.export import ExportRequest
 from app.services import summarizer, export_service
@@ -161,57 +168,72 @@ def health_check():
 
 
 @router.post("/summarize", response_model=SummarizeResponse)
-def summarize_route(request: SummarizeRequest):
+def summarize_route(
+    request: SummarizeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     text = request.text.strip()
 
     # ── 입력 검증 ────────────────────────────────────────────────────────────
-    # 여기서 검증하는 이유: 잘못된 입력이 서비스 계층까지 흘러들어가면
-    # 불필요한 LLM 호출이 발생하거나 모호한 에러가 날 수 있습니다.
-    # 경계(boundary)에서 일찍 차단하면 서비스 계층은 "유효한 입력만 온다"고 가정할 수 있습니다.
-
     if not text:
         raise HTTPException(status_code=400, detail="텍스트가 비어 있습니다.")
 
-    # Swagger UI 기본값 등 무의미한 placeholder 차단
     if text.lower() in PLACEHOLDER_VALUES:
         raise HTTPException(status_code=400, detail="실제 문서 내용을 입력해 주세요. 예시 텍스트는 허용되지 않습니다.")
 
-    # 10자 미만은 요약 의미가 없고 LLM이 품질 낮은 응답을 낼 수 있습니다.
     if len(text) < 10:
         raise HTTPException(status_code=400, detail="텍스트가 너무 짧습니다. 요약할 내용을 충분히 입력해 주세요.")
 
-    # ── 서비스 호출 및 에러 변환 ─────────────────────────────────────────────
+    # ── 요약 실행 ─────────────────────────────────────────────────────────────
+    summary_mode = "chunked" if len(text) > settings.chunk_threshold else "single"
+    start_ms = time.monotonic()
+
     try:
-        return summarizer.summarize(text)
+        result = summarizer.summarize(text)
     except RuntimeError as e:
-        # RuntimeError를 502 Bad Gateway로 변환합니다.
-        # 502를 쓰는 이유: 우리 서버가 의존하는 외부 서버(Ollama)에서 문제가 발생했기 때문입니다.
-        # 클라이언트 잘못(4xx)이 아니라, 백엔드가 의존하는 서비스 문제(5xx)입니다.
+        summary_repository.create(
+            db,
+            user_id=current_user.user_id,
+            model_name=settings.ollama_model,
+            summary_mode=summary_mode,
+            input_chars=len(text),
+            output_summary="",
+            status="FAILED",
+            file_type="text",
+            error_message=str(e),
+            processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+        )
         raise HTTPException(status_code=502, detail=str(e))
+
+    summary_repository.create(
+        db,
+        user_id=current_user.user_id,
+        model_name=settings.ollama_model,
+        summary_mode=summary_mode,
+        input_chars=len(text),
+        output_summary=result.summary,
+        status="SUCCESS",
+        file_type="text",
+        processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+    )
+
+    return result
 
 
 @router.post("/summarize/file", response_model=SummarizeResponse)
-async def summarize_file_route(file: UploadFile = File(...)):
+async def summarize_file_route(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     txt, pdf, docx 파일을 업로드받아 기존 요약 파이프라인으로 처리합니다.
 
     async def를 쓰는 이유: UploadFile.read()가 비동기 I/O이기 때문입니다.
-
-    흐름:
-      1. 파일 수신 및 확장자 검증
-      2. 확장자에 따라 _read_txt() / _read_pdf() / _read_docx()로 텍스트 추출
-      3. 텍스트 내용 검증 (비어있음 / 너무 짧음)
-      4. summarizer.summarize(text) 호출 — 기존 요약 파이프라인 그대로 사용
-      5. 파일 처리 단계(pre_steps)를 summarizer steps 앞에 붙여 반환
-
-    새 파일 형식 추가 방법:
-      1. ALLOWED_EXTENSIONS에 확장자 추가
-      2. 해당 형식의 _read_XXX() 함수 작성
-      3. 아래 추출 분기에 elif 추가
     """
     # ── 파일 형식 검증 ───────────────────────────────────────────────────────
     filename = file.filename or ""
-    # rsplit으로 마지막 점 이후를 확장자로 취급합니다.
     ext = ("." + filename.rsplit(".", 1)[-1]).lower() if "." in filename else ""
 
     if ext not in ALLOWED_EXTENSIONS:
@@ -243,16 +265,11 @@ async def summarize_file_route(file: UploadFile = File(...)):
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))
         pre_steps.append("이미지 OCR 추출 완료")
-        # ── OCR 원문 디버그 ───────────────────────────────────────────────────
-        # OCR 품질 확인용 임시 로그입니다. 서버 콘솔과 steps 양쪽에 남깁니다.
-        # 인식 결과가 기대와 다를 때 이 출력으로 전처리/psm 튜닝 방향을 잡습니다.
-        # 품질 확인 후 제거하거나 로그 레벨로 격하해도 됩니다.
         _ocr_preview = text[:300].replace("\n", " ↵ ")
         print(f"[OCR RAW] {_ocr_preview}")
         pre_steps.append(f"[OCR 원문 미리보기] {_ocr_preview}")
 
     # ── 텍스트 내용 검증 ─────────────────────────────────────────────────────
-    # 파일은 선택됐지만 내용이 없거나 너무 짧은 경우를 걸러냅니다.
     if not text:
         raise HTTPException(status_code=400, detail="파일 내용이 비어 있습니다.")
 
@@ -262,13 +279,44 @@ async def summarize_file_route(file: UploadFile = File(...)):
             detail="텍스트가 너무 짧습니다. 요약할 내용이 충분한 파일을 업로드해 주세요.",
         )
 
-    # ── 요약 실행 및 steps 병합 ──────────────────────────────────────────────
+    # ── 요약 실행 및 이력 저장 ───────────────────────────────────────────────
+    summary_mode = "chunked" if len(text) > settings.chunk_threshold else "single"
+    file_type = ext.lstrip(".")
+    start_ms = time.monotonic()
+
     try:
         result = summarizer.summarize(text)
     except RuntimeError as e:
+        summary_repository.create(
+            db,
+            user_id=current_user.user_id,
+            model_name=settings.ollama_model,
+            summary_mode=summary_mode,
+            input_chars=len(text),
+            output_summary="",
+            status="FAILED",
+            original_filename=filename,
+            file_type=file_type,
+            file_size=len(raw),
+            error_message=str(e),
+            processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+        )
         raise HTTPException(status_code=502, detail=str(e))
 
-    # 파일 처리 단계를 요약 단계 앞에 붙여 하나의 흐름으로 반환합니다.
+    summary_repository.create(
+        db,
+        user_id=current_user.user_id,
+        model_name=settings.ollama_model,
+        summary_mode=summary_mode,
+        input_chars=len(text),
+        output_summary=result.summary,
+        status="SUCCESS",
+        original_filename=filename,
+        file_type=file_type,
+        file_size=len(raw),
+        processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+    )
+
     return SummarizeResponse(summary=result.summary, steps=pre_steps + result.steps)
 
 

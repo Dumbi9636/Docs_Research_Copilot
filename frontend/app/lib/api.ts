@@ -1,10 +1,18 @@
 // API 호출 모듈
 //
 // 이 파일의 역할: 백엔드와의 HTTP 통신만 전담합니다.
-// - 네트워크 에러와 API 에러 모두 Error 객체로 통일해 상위로 throw합니다.
-// - 호출하는 쪽(page.tsx)은 try/catch 하나로 모든 에러를 처리할 수 있습니다.
+// - 401 응답은 UnauthorizedError로 throw해 호출부(page.tsx)에서 token refresh 후 재시도할 수 있게 합니다.
+// - 그 외 에러는 Error 객체로 통일해 상위로 throw합니다.
 
 const BACKEND_URL = "http://localhost:8000";
+
+// 401 전용 에러 클래스 — 호출부에서 instanceof로 구분해 refresh 재시도 처리에 사용합니다.
+export class UnauthorizedError extends Error {
+  constructor() {
+    super("인증이 필요합니다. 다시 로그인해 주세요.");
+    this.name = "UnauthorizedError";
+  }
+}
 
 export interface SummarizeResult {
   summary: string;
@@ -13,23 +21,26 @@ export interface SummarizeResult {
 
 export async function summarizeText(
   text: string,
+  accessToken: string,
   options?: { signal?: AbortSignal }
 ): Promise<SummarizeResult> {
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}/summarize`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
       body: JSON.stringify({ text }),
       signal: options?.signal,
     });
   } catch (e) {
-    // AbortError는 취소 신호이므로 상위(page.tsx)로 그대로 전달합니다.
     if (e instanceof DOMException && e.name === "AbortError") throw e;
-    // fetch 자체가 실패하면 서버가 꺼져 있거나 CORS 문제입니다.
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
 
+  if (res.status === 401) throw new UnauthorizedError();
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail ?? "알 수 없는 오류가 발생했습니다.");
   return data;
@@ -37,9 +48,9 @@ export async function summarizeText(
 
 export async function summarizeFile(
   file: File,
+  accessToken: string,
   options?: { signal?: AbortSignal }
 ): Promise<SummarizeResult> {
-  // Content-Type 헤더는 FormData 사용 시 브라우저가 자동으로 설정합니다.
   const formData = new FormData();
   formData.append("file", file);
 
@@ -47,6 +58,10 @@ export async function summarizeFile(
   try {
     res = await fetch(`${BACKEND_URL}/summarize/file`, {
       method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        // Content-Type은 FormData 사용 시 브라우저가 자동 설정합니다.
+      },
       body: formData,
       signal: options?.signal,
     });
@@ -55,6 +70,7 @@ export async function summarizeFile(
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
 
+  if (res.status === 401) throw new UnauthorizedError();
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail ?? "알 수 없는 오류가 발생했습니다.");
   return data;
@@ -67,6 +83,7 @@ export async function exportSummary(
   format: ExportFormat,
   sourceFilename: string
 ): Promise<void> {
+  // export는 요약 결과 텍스트만 사용하므로 인증 불필요
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}/export`, {
@@ -78,7 +95,6 @@ export async function exportSummary(
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
 
-  // 에러 응답은 JSON, 성공 응답은 binary입니다.
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.detail ?? "다운로드 중 오류가 발생했습니다.");
@@ -93,19 +109,10 @@ export async function exportSummary(
   URL.revokeObjectURL(url);
 }
 
-/**
- * 백엔드 파일명 정책과 동일한 규칙으로 다운로드 파일명을 생성합니다.
- *
- * sourceFilename 있음: "{base}_요약결과_{date}.{format}"
- * sourceFilename 없음: "요약결과_{date}.{format}"
- *
- * base는 원본 파일명의 마지막 확장자만 제거합니다.
- * 예: "report.final.v2.docx" → "report.final.v2"
- */
 function _buildExportFilename(sourceFilename: string, format: ExportFormat): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   if (sourceFilename) {
-    const base = sourceFilename.replace(/\.[^.]+$/, ""); // 마지막 확장자 하나만 제거
+    const base = sourceFilename.replace(/\.[^.]+$/, "");
     return `${base}_요약결과_${date}.${format}`;
   }
   return `요약결과_${date}.${format}`;

@@ -10,3 +10,12 @@ pytesseract
 Pillow
 pymupdf
 fpdf2
+# DB
+sqlalchemy
+alembic
+oracledb
+# Auth
+passlib[bcrypt]
+bcrypt<5
+python-jose[cryptography]
+email-validator

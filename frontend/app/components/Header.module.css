@@ -1,0 +1,85 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.headerInner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.3px;
+  text-decoration: none;
+}
+
+.logo span {
+  color: #4f6ef7;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 로그인 상태: 사용자 이름 */
+.userName {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}
+
+.adminBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 99px;
+  vertical-align: middle;
+}
+
+/* 버튼 공통 */
+.btn {
+  padding: 6px 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.btnGhost {
+  background: transparent;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btnGhost:hover {
+  background: #f9fafb;
+}
+
+.btnPrimary {
+  background: #4f6ef7;
+  color: #ffffff;
+  border: 1px solid transparent;
+}
+
+.btnPrimary:hover {
+  background: #3b5bdb;
+}

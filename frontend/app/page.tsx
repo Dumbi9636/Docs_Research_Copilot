@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
-import { summarizeText, summarizeFile } from "./lib/api";
+import { summarizeText, summarizeFile, UnauthorizedError } from "./lib/api";
+import { useAuth } from "./lib/auth-context";
+import Header from "./components/Header";
 import FileUploadInput from "./components/FileUploadInput";
 import SummaryResult from "./components/SummaryResult";
 import DownloadSection from "./components/DownloadSection";
@@ -35,7 +38,9 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [dots, setDots] = useState("");
 
-  // 진행 중인 요약 요청을 취소하기 위한 ref입니다.
+  const { isLoggedIn, isLoading, accessToken, tryRefreshToken } = useAuth();
+  const router = useRouter();
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -58,6 +63,8 @@ export default function Home() {
   }
 
   async function handleSummarize() {
+    if (!accessToken) return;
+
     setError("");
     setCancelledMessage("");
     setSummary("");
@@ -68,14 +75,27 @@ export default function Home() {
     abortControllerRef.current = controller;
 
     try {
-      const result = file
-        ? await summarizeFile(file, { signal: controller.signal })
-        : await summarizeText(text, { signal: controller.signal });
+      const result = await _callSummarize(accessToken, controller.signal);
       setSummary(result.summary);
       setSteps(result.steps);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledMessage("요약이 취소되었습니다.");
+      } else if (e instanceof UnauthorizedError) {
+        // access_token 만료 → refresh 시도 후 1회 재시도
+        const newToken = await tryRefreshToken();
+        if (newToken) {
+          try {
+            const result = await _callSummarize(newToken, controller.signal);
+            setSummary(result.summary);
+            setSteps(result.steps);
+          } catch (retryErr) {
+            setError(retryErr instanceof Error ? retryErr.message : "알 수 없는 오류가 발생했습니다.");
+          }
+        } else {
+          // refresh도 실패 → 로그인 페이지로
+          router.push("/login");
+        }
       } else {
         setError(e instanceof Error ? e.message : "알 수 없는 오류가 발생했습니다.");
       }
@@ -85,31 +105,26 @@ export default function Home() {
     }
   }
 
+  // 파일/텍스트에 따라 적절한 API 함수를 호출합니다.
+  async function _callSummarize(token: string, signal: AbortSignal) {
+    return file
+      ? summarizeFile(file, token, { signal })
+      : summarizeText(text, token, { signal });
+  }
+
   function handleCancel() {
     abortControllerRef.current?.abort();
   }
 
-  const canSubmit = file !== null || text.trim() !== "";
+  const hasInput = file !== null || text.trim() !== "";
+  // 요약 버튼 활성 조건: 로그인 상태 + 입력 있음 + 로딩 아님
+  const canSubmit = isLoggedIn && hasInput && !loading;
 
   return (
     <div className={styles.pageWrapper}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className={styles.header}>
-        <div className={styles.headerInner}>
-          <span className={styles.headerLogo}>
-            Docs<span>Research</span> Copilot
-          </span>
-          <div className={styles.headerActions}>
-            <button className={`${styles.headerBtn} ${styles.headerBtnGhost}`}>
-              로그인
-            </button>
-            <button className={`${styles.headerBtn} ${styles.headerBtnPrimary}`}>
-              시작하기
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className={styles.hero}>
@@ -132,7 +147,7 @@ export default function Home() {
 
       <div className={styles.contentArea}>
 
-        {/* ── 메인 카드 (입력 / 요약 / 결과) ──────────────────────────────── */}
+        {/* ── 메인 카드 ────────────────────────────────────────────────────── */}
         <div className={styles.mainCard}>
 
           {/* 직접 입력 */}
@@ -154,6 +169,17 @@ export default function Home() {
           {/* 파일 업로드 */}
           <FileUploadInput file={file} onFileChange={handleFileChange} />
 
+          {/* 비로그인 안내 — isLoading 중에는 표시하지 않습니다 */}
+          {!isLoading && !isLoggedIn && (
+            <div className={styles.authNotice}>
+              요약 기능을 사용하려면{" "}
+              <a href="/login" className={styles.authNoticeLink}>
+                로그인
+              </a>
+              이 필요합니다.
+            </div>
+          )}
+
           {/* 버튼 행 */}
           <div className={styles.buttonRow}>
             {loading && (
@@ -164,7 +190,7 @@ export default function Home() {
             <button
               className={styles.button}
               onClick={handleSummarize}
-              disabled={loading || !canSubmit}
+              disabled={!canSubmit}
             >
               {loading ? `요약중${dots}` : "요약하기"}
             </button>

@@ -14,35 +14,36 @@ _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 class Settings(BaseSettings):
     # ── Ollama 설정 ─────────────────────────────────────────────────────────
-    # Ollama 서버 주소. 로컬 기본 포트는 11434입니다.
     ollama_base_url: str = "http://localhost:11434"
-    # 사용할 LLM 모델 이름. 'ollama pull <모델명>'으로 미리 설치해야 합니다.
     ollama_model: str = "llama3"
-    # Ollama 응답 대기 최대 시간(초). LLM 추론은 느릴 수 있어 넉넉히 설정합니다.
-    # chunk당 평균 추론 시간의 2~3배로 설정하는 것을 권장합니다.
-    # 실측 약 72초/chunk 기준 → 180초 (여유 2.5배)
     ollama_timeout: float = 180.0
 
     # ── CORS 설정 ────────────────────────────────────────────────────────────
-    # 브라우저가 API를 호출할 수 있도록 허용할 프론트엔드 출처입니다.
     frontend_origin: str = "http://localhost:3000"
 
     # ── 청킹 설정 ────────────────────────────────────────────────────────────
-    # 이 글자 수를 초과하면 chunk 분할 요약으로 전환합니다.
-    # LLM은 컨텍스트 한계가 있어, 너무 긴 텍스트는 한 번에 처리하기 어렵습니다.
     chunk_threshold: int = 1500
-    # chunk당 목표 글자 수 (단락/문장 경계를 우선하며 이 크기에 가깝게 분할합니다)
-    # 늘릴수록 chunk 수가 줄어 LLM 호출 횟수가 감소합니다 (속도 개선 효과 큼)
-    # 단, chunk가 너무 크면 bullet 3개로 핵심을 압축하기 어려워 요약 품질이 저하될 수 있습니다.
-    # 권장 범위: 1000(품질 우선) ~ 2000(속도 우선)
     target_chunk_size: int = 2000
-    # 허용하는 최대 chunk 수. 초과 시 에러를 반환합니다.
-    # 무제한 허용 시 LLM 호출이 과도하게 발생할 수 있어 상한을 둡니다.
     max_chunks: int = 10
-    # chunk 병렬 요약 시 동시에 Ollama에 보낼 최대 요청 수입니다.
-    # 기본값 1 = 사실상 직렬 (CPU 추론 또는 VRAM 여유가 없는 환경에서 안정적)
-    # GPU 추론 환경에서 병렬 효과를 실험하려면 OLLAMA_NUM_PARALLEL과 함께 2~4로 조정
     summarize_max_workers: int = 1
+
+    # ── Oracle DB 설정 ───────────────────────────────────────────────────────
+    # DSN 형식: host:port/service_name (예: localhost:1521/XE)
+    oracle_user: str = "your_db_user"
+    oracle_password: str = "your_db_password"
+    oracle_dsn: str = "localhost:1521/XE"
+
+    # Thick mode용 Oracle Instant Client 경로 (Windows 기준)
+    # 예: C:\oracle\instantclient_21_12
+    # 빈 문자열이면 PATH 환경변수에서 자동 탐색합니다.
+    oracle_client_lib_dir: str = ""
+
+    # ── JWT 설정 ─────────────────────────────────────────────────────────────
+    # 운영 환경에서는 반드시 환경변수로 교체해야 합니다.
+    jwt_secret_key: str = "change-this-to-a-long-random-secret-key"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
 
     model_config = SettingsConfigDict(
         env_file=_ENV_FILE,
