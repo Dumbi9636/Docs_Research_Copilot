@@ -1,4 +1,5 @@
 # Docs Research Copilot
+<img width="1590" height="1570" alt="image" src="https://github.com/user-attachments/assets/d8d1c8e0-e753-4279-b187-200f3db59616" />
 
 문서 또는 이미지 파일을 업로드하면 텍스트를 추출하고, Ollama 기반 로컬 LLM이 핵심 내용을 **한국어로 요약**해 주는 서비스입니다.
 요약 결과는 txt / docx / pdf 형식으로 다운로드할 수 있으며, 회원가입 후 로그인하면 모든 요약 이력이 DB에 저장됩니다.
