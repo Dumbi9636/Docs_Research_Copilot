@@ -205,6 +205,7 @@ def summarize_route(
             document_type=request.document_type,
             error_message=str(e),
             processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+            input_text=text,
         )
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -219,6 +220,7 @@ def summarize_route(
         file_type="text",
         document_type=request.document_type,
         processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+        input_text=text,
     )
 
     return SummarizeResponse(
@@ -307,6 +309,7 @@ async def summarize_file_route(
             file_size=len(raw),
             error_message=str(e),
             processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+            input_text=text,
         )
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -322,6 +325,7 @@ async def summarize_file_route(
         file_type=file_type,
         file_size=len(raw),
         processing_time_ms=int((time.monotonic() - start_ms) * 1000),
+        input_text=text,
     )
 
     return SummarizeResponse(
@@ -430,7 +434,12 @@ def chat_route(
 
     # ── Ollama 호출 ─────────────────────────────────────────────────────────────
     try:
-        ai_answer = chat_service.answer(record.output_summary, request.messages, question)
+        ai_answer = chat_service.answer(
+            record.output_summary,
+            record.input_text,   # 원문 텍스트 (NULL이면 chat_service에서 fallback 처리)
+            request.messages,
+            question,
+        )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
 

@@ -28,6 +28,11 @@ class SummaryHistory(Base):
     # Oracle CLOB — SQLAlchemy Text 타입이 Oracle에서 CLOB으로 자동 매핑됨
     output_summary = Column(Text, nullable=True)
 
+    # 요약 전 추출된 원문 텍스트. 문서 기반 Q&A(/chat)의 컨텍스트로 사용됩니다.
+    # 파일 업로드 시 추출된 텍스트, 직접 입력 시 입력 텍스트 그대로 저장됩니다.
+    # NULL: 이 컬럼 추가 전에 생성된 기존 기록 → /chat에서 요약문 fallback 처리합니다.
+    input_text = Column(Text, nullable=True)
+
     document_type = Column(String(50), nullable=True)   # general / legal / medical / technical 등
 
     status = Column(String(20), nullable=False, default="SUCCESS")

@@ -18,6 +18,7 @@ def create(
     document_type: str | None = None,
     error_message: str | None = None,
     processing_time_ms: int | None = None,
+    input_text: str | None = None,
 ) -> SummaryHistory:
     record = SummaryHistory(
         user_id=user_id,
@@ -32,6 +33,7 @@ def create(
         status=status,
         error_message=error_message,
         processing_time_ms=processing_time_ms,
+        input_text=input_text,
     )
     db.add(record)
     db.commit()
