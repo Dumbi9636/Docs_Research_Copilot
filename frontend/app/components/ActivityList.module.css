@@ -1,0 +1,451 @@
+/* ── 레이아웃 ────────────────────────────────────────────────────────────────── */
+
+.pageWrapper {
+  min-height: 100vh;
+  background: #f0f2f7;
+}
+
+.main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ── 제목 행 ──────────────────────────────────────────────────────────────────── */
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.backLink {
+  font-size: 0.875rem;
+  color: #4f6ef7;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+/* ── 컨트롤 바 (필터 + 검색) ──────────────────────────────────────────────────── */
+
+.controlRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filterBar {
+  display: flex;
+  gap: 6px;
+}
+
+.filterBtn {
+  padding: 6px 14px;
+  font-size: 0.825rem;
+  font-weight: 500;
+  font-family: inherit;
+  border-radius: 99px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.filterBtn:hover {
+  background: #f3f4f6;
+}
+
+.filterBtnActive {
+  background: #4f6ef7;
+  border-color: #4f6ef7;
+  color: #ffffff;
+}
+
+.filterBtnActive:hover {
+  background: #3b5bdb;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 160px;
+  max-width: 280px;
+  padding: 7px 12px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+.searchInput:focus {
+  border-color: #4f6ef7;
+}
+
+/* ── 상태 박스 (로딩 / 에러 / 빈 화면) ─────────────────────────────────────────── */
+
+.stateBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 56px 24px;
+  color: #6b7280;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.stateBoxError {
+  color: #dc2626;
+}
+
+.stateIcon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+/* ── 테이블 ───────────────────────────────────────────────────────────────────── */
+
+.tableWrapper {
+  background: #ffffff;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.table th {
+  background: #f9fafb;
+  padding: 11px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 16px;
+  color: #111827;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.clickableRow {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.clickableRow:hover {
+  background: #f5f7ff;
+}
+
+.fileNameCell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dateCell {
+  white-space: nowrap;
+  color: #6b7280;
+  font-size: 0.825rem;
+}
+
+.empty {
+  color: #d1d5db;
+}
+
+/* ── 유형 뱃지 ────────────────────────────────────────────────────────────────── */
+
+.badgeSummary {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.775rem;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.badgeDownload {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.775rem;
+  font-weight: 600;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+/* ── 형식 뱃지 ────────────────────────────────────────────────────────────────── */
+
+.formatBadge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #f3f4f6;
+  color: #374151;
+  letter-spacing: 0.3px;
+}
+
+/* ── 상태 뱃지 ────────────────────────────────────────────────────────────────── */
+
+.statusBadgeSuccess {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.775rem;
+  font-weight: 600;
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.statusBadgeFailed {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 0.775rem;
+  font-weight: 600;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ── 액션 셀 (재다운로드 + 삭제) ───────────────────────────────────────────────── */
+
+.actionCell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 재다운로드 버튼 (테이블) ──────────────────────────────────────────────────── */
+
+.redownloadButton {
+  padding: 4px 10px;
+  font-size: 0.775rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: #4f6ef7;
+  background: transparent;
+  border: 1px solid #c7d2fe;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.redownloadButton:hover:not(:disabled) {
+  background: #eef2ff;
+}
+
+.redownloadButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 재다운로드 버튼 (모달) ────────────────────────────────────────────────────── */
+
+.redownloadButtonModal {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: #ffffff;
+  background: #4f6ef7;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.redownloadButtonModal:hover {
+  background: #3b5bdb;
+}
+
+/* ── 삭제 버튼 ────────────────────────────────────────────────────────────────── */
+
+.deleteButton {
+  padding: 4px 10px;
+  font-size: 0.775rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: #dc2626;
+  background: transparent;
+  border: 1px solid #fca5a5;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.deleteButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 상세 모달 ────────────────────────────────────────────────────────────────── */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 14px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.modalTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.modalClose {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.modalClose:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.modalBody {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── 상세 행 ──────────────────────────────────────────────────────────────────── */
+
+.detailRow {
+  display: flex;
+  gap: 12px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.detailLabel {
+  flex-shrink: 0;
+  width: 90px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.detailValue {
+  color: #111827;
+  word-break: break-all;
+}
+
+.detailSection {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detailSectionTitle {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.summaryText {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px 14px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.errorText {
+  font-size: 0.875rem;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 10px 14px;
+  word-break: break-word;
+}

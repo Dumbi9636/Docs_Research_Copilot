@@ -27,16 +27,11 @@ export default function Header() {
             <>
               {isLoggedIn && user ? (
                 <>
-                  <span className={styles.userName}>
+                  <Link href="/mypage" className={styles.userNameLink}>
                     {user.name}님
                     {user.role === "ADMIN" && (
                       <span className={styles.adminBadge}>관리자</span>
                     )}
-                  </span>
-                  <Link href="/history">
-                    <button className={`${styles.btn} ${styles.btnGhost}`}>
-                      활동 이력
-                    </button>
                   </Link>
                   <button
                     className={`${styles.btn} ${styles.btnGhost}`}

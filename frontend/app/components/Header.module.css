@@ -34,11 +34,28 @@
   gap: 8px;
 }
 
-/* 로그인 상태: 사용자 이름 */
-.userName {
+/* 로그인 상태: 사용자 이름 (마이페이지 링크) */
+.userNameLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.875rem;
   color: #374151;
   font-weight: 500;
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-color: #4f6ef7;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1.5px;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.userNameLink:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .adminBadge {
