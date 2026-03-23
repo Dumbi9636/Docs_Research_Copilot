@@ -7,9 +7,10 @@ import styles from "../page.module.css";
 interface Props {
   summary: string;
   steps: string[];
+  isAdmin?: boolean;
 }
 
-export default function SummaryResult({ summary, steps }: Props) {
+export default function SummaryResult({ summary, steps, isAdmin = false }: Props) {
   return (
     <>
       {summary && (
@@ -18,7 +19,7 @@ export default function SummaryResult({ summary, steps }: Props) {
           {summary}
         </div>
       )}
-      {steps.length > 0 && (
+      {isAdmin && steps.length > 0 && (
         <ul className={styles.stepsList}>
           {steps.map((step, i) => (
             <li key={i}>{step}</li>

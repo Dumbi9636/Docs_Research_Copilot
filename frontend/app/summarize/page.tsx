@@ -277,7 +277,7 @@ export default function SummarizePage() {
             </div>
           )}
 
-          <SummaryResult summary={summary} steps={steps} />
+          <SummaryResult summary={summary} steps={steps} isAdmin={user?.role === "ADMIN"} />
           {summary && accessToken && (
             <DownloadSection
               summary={summary}
