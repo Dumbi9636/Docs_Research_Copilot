@@ -8,9 +8,16 @@
 
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from app.clients import ollama
 from app.core.config import settings
-from app.schemas.summarize import SummarizeResponse
+
+
+@dataclass
+class SummaryResult:
+    """서비스 계층 내부 반환 타입. history_id는 DB 저장 후 라우트에서 채웁니다."""
+    summary: str
+    steps: list[str] = field(default_factory=list)
 
 
 # ── 프롬프트 팩토리 ───────────────────────────────────────────────────────────
@@ -491,7 +498,7 @@ def _summarize_one_chunk(i: int, chunk: str, total: int) -> tuple[int, str]:
 
 # ── 요약 진입점 ───────────────────────────────────────────────────────────────
 
-def summarize(text: str) -> SummarizeResponse:
+def summarize(text: str) -> SummaryResult:
     """
     텍스트를 받아 Ollama로 요약하고 처리 단계와 함께 반환합니다.
 
@@ -516,7 +523,7 @@ def summarize(text: str) -> SummarizeResponse:
 
 # ── 단일 요약 ─────────────────────────────────────────────────────────────────
 
-def _summarize_single(text: str, steps: list[str]) -> SummarizeResponse:
+def _summarize_single(text: str, steps: list[str]) -> SummaryResult:
     """
     짧은 문서를 한 번의 LLM 호출로 요약합니다.
 
@@ -538,12 +545,12 @@ def _summarize_single(text: str, steps: list[str]) -> SummarizeResponse:
         except RuntimeError:
             steps.append("한국어 재작성 실패 — 원본 결과 유지")
     steps.append("요약 생성 완료")
-    return SummarizeResponse(summary=result, steps=steps)
+    return SummaryResult(summary=result, steps=steps)
 
 
 # ── 청킹 요약 ─────────────────────────────────────────────────────────────────
 
-def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
+def _summarize_chunked(text: str, steps: list[str]) -> SummaryResult:
     """
     긴 문서를 여러 chunk로 나눠 요약하고, 결과를 통합합니다.
 
@@ -645,4 +652,4 @@ def _summarize_chunked(text: str, steps: list[str]) -> SummarizeResponse:
         raise RuntimeError(f"최종 통합 요약 중 오류 발생: {e}")
 
     steps.append("최종 요약 생성 완료")
-    return SummarizeResponse(summary=final, steps=steps)
+    return SummaryResult(summary=final, steps=steps)

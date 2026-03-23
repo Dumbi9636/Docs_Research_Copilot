@@ -28,6 +28,8 @@ class SummaryHistory(Base):
     # Oracle CLOB — SQLAlchemy Text 타입이 Oracle에서 CLOB으로 자동 매핑됨
     output_summary = Column(Text, nullable=True)
 
+    document_type = Column(String(50), nullable=True)   # general / legal / medical / technical 등
+
     status = Column(String(20), nullable=False, default="SUCCESS")
     error_message = Column(String(2000), nullable=True)
     processing_time_ms = Column(Integer, nullable=True)
@@ -35,3 +37,4 @@ class SummaryHistory(Base):
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
     user = relationship("User", back_populates="summary_histories")
+    download_logs = relationship("DownloadLog", back_populates="summary_history")

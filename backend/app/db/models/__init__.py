@@ -2,3 +2,4 @@
 from app.db.models.user import User  # noqa: F401
 from app.db.models.summary_history import SummaryHistory  # noqa: F401
 from app.db.models.refresh_token import RefreshToken  # noqa: F401
+from app.db.models.download_log import DownloadLog  # noqa: F401

@@ -18,9 +18,11 @@ import styles from "../page.module.css";
 interface Props {
   summary: string;
   sourceFilename?: string;
+  accessToken: string;
+  historyId?: number;
 }
 
-export default function DownloadSection({ summary, sourceFilename = "" }: Props) {
+export default function DownloadSection({ summary, sourceFilename = "", accessToken, historyId }: Props) {
   const [format, setFormat] = useState<ExportFormat>("txt");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -29,7 +31,7 @@ export default function DownloadSection({ summary, sourceFilename = "" }: Props)
     setError("");
     setLoading(true);
     try {
-      await exportSummary(summary, format, sourceFilename);
+      await exportSummary(summary, format, sourceFilename, accessToken, historyId);
     } catch (e) {
       setError(e instanceof Error ? e.message : "다운로드 중 오류가 발생했습니다.");
     } finally {

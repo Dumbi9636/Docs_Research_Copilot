@@ -33,6 +33,11 @@ export default function Header() {
                       <span className={styles.adminBadge}>관리자</span>
                     )}
                   </span>
+                  <Link href="/history">
+                    <button className={`${styles.btn} ${styles.btnGhost}`}>
+                      활동 이력
+                    </button>
+                  </Link>
                   <button
                     className={`${styles.btn} ${styles.btnGhost}`}
                     onClick={handleLogout}

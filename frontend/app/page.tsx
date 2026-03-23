@@ -34,6 +34,7 @@ export default function Home() {
   const [file, setFile] = useState<File | null>(null);
   const [summary, setSummary] = useState("");
   const [steps, setSteps] = useState<string[]>([]);
+  const [historyId, setHistoryId] = useState<number | undefined>(undefined);
   const [error, setError] = useState("");
   const [cancelledMessage, setCancelledMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,7 @@ export default function Home() {
     setFile(selected);
     setSummary("");
     setSteps([]);
+    setHistoryId(undefined);
     setError("");
     setCancelledMessage("");
   }
@@ -70,6 +72,7 @@ export default function Home() {
     setCancelledMessage("");
     setSummary("");
     setSteps([]);
+    setHistoryId(undefined);
     setLoading(true);
 
     const controller = new AbortController();
@@ -79,6 +82,7 @@ export default function Home() {
       const result = await _callSummarize(accessToken, controller.signal);
       setSummary(result.summary);
       setSteps(result.steps);
+      setHistoryId(result.history_id);
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
         setCancelledMessage("요약이 취소되었습니다.");
@@ -90,6 +94,7 @@ export default function Home() {
             const result = await _callSummarize(newToken, controller.signal);
             setSummary(result.summary);
             setSteps(result.steps);
+            setHistoryId(result.history_id);
           } catch (retryErr) {
             setError(retryErr instanceof Error ? retryErr.message : "알 수 없는 오류가 발생했습니다.");
           }
@@ -208,8 +213,13 @@ export default function Home() {
             <div className={styles.resultDivider} />
           )}
           <SummaryResult summary={summary} steps={steps} />
-          {summary && (
-            <DownloadSection summary={summary} sourceFilename={file?.name ?? ""} />
+          {summary && accessToken && (
+            <DownloadSection
+              summary={summary}
+              sourceFilename={file?.name ?? ""}
+              accessToken={accessToken}
+              historyId={historyId}
+            />
           )}
         </div>
 

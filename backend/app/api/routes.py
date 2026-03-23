@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.db.models.user import User
 from app.db.session import get_db
-from app.repositories import summary_repository
+from app.repositories import summary_repository, download_repository
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.schemas.export import ExportRequest
 from app.services import summarizer, export_service
@@ -201,12 +201,13 @@ def summarize_route(
             output_summary="",
             status="FAILED",
             file_type="text",
+            document_type=request.document_type,
             error_message=str(e),
             processing_time_ms=int((time.monotonic() - start_ms) * 1000),
         )
         raise HTTPException(status_code=502, detail=str(e))
 
-    summary_repository.create(
+    record = summary_repository.create(
         db,
         user_id=current_user.user_id,
         model_name=settings.ollama_model,
@@ -215,10 +216,15 @@ def summarize_route(
         output_summary=result.summary,
         status="SUCCESS",
         file_type="text",
+        document_type=request.document_type,
         processing_time_ms=int((time.monotonic() - start_ms) * 1000),
     )
 
-    return result
+    return SummarizeResponse(
+        summary=result.summary,
+        steps=result.steps,
+        history_id=record.history_id,
+    )
 
 
 @router.post("/summarize/file", response_model=SummarizeResponse)
@@ -303,7 +309,7 @@ async def summarize_file_route(
         )
         raise HTTPException(status_code=502, detail=str(e))
 
-    summary_repository.create(
+    record = summary_repository.create(
         db,
         user_id=current_user.user_id,
         model_name=settings.ollama_model,
@@ -317,15 +323,23 @@ async def summarize_file_route(
         processing_time_ms=int((time.monotonic() - start_ms) * 1000),
     )
 
-    return SummarizeResponse(summary=result.summary, steps=pre_steps + result.steps)
+    return SummarizeResponse(
+        summary=result.summary,
+        steps=pre_steps + result.steps,
+        history_id=record.history_id,
+    )
 
 
 @router.post("/export")
-def export_route(request: ExportRequest):
+def export_route(
+    request: ExportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """
     요약 결과를 지정한 형식의 파일로 변환해 반환합니다.
 
-    요청: { summary, format, source_filename }
+    요청: { summary, format, source_filename, history_id }
     응답: binary 파일 (Content-Disposition: attachment)
 
     현재 지원 형식: txt / docx / pdf
@@ -336,9 +350,39 @@ def export_route(request: ExportRequest):
             request.summary, request.format, request.source_filename
         )
     except ValueError as e:
+        if not request.skip_log:
+            download_repository.create(
+                db,
+                user_id=current_user.user_id,
+                download_format=request.format,
+                file_name=request.source_filename or None,
+                history_id=request.history_id,
+                status="FAILED",
+                error_message=str(e),
+            )
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
+        if not request.skip_log:
+            download_repository.create(
+                db,
+                user_id=current_user.user_id,
+                download_format=request.format,
+                file_name=request.source_filename or None,
+                history_id=request.history_id,
+                status="FAILED",
+                error_message=str(e),
+            )
         raise HTTPException(status_code=500, detail=str(e))
+
+    if not request.skip_log:
+        download_repository.create(
+            db,
+            user_id=current_user.user_id,
+            download_format=request.format,
+            file_name=request.source_filename or None,
+            history_id=request.history_id,
+            status="SUCCESS",
+        )
 
     filename = _build_export_filename(request.source_filename, ext)
 

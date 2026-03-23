@@ -17,12 +17,13 @@ export class UnauthorizedError extends Error {
 export interface SummarizeResult {
   summary: string;
   steps: string[];
+  history_id: number;
 }
 
 export async function summarizeText(
   text: string,
   accessToken: string,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; documentType?: string }
 ): Promise<SummarizeResult> {
   let res: Response;
   try {
@@ -32,7 +33,7 @@ export async function summarizeText(
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, document_type: options?.documentType ?? null }),
       signal: options?.signal,
     });
   } catch (e) {
@@ -81,20 +82,32 @@ export type ExportFormat = "txt" | "docx" | "pdf";
 export async function exportSummary(
   summary: string,
   format: ExportFormat,
-  sourceFilename: string
+  sourceFilename: string,
+  accessToken: string,
+  historyId?: number,
+  skipLog: boolean = false
 ): Promise<void> {
-  // export는 요약 결과 텍스트만 사용하므로 인증 불필요
   let res: Response;
   try {
     res = await fetch(`${BACKEND_URL}/export`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ summary, format, source_filename: sourceFilename }),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({
+        summary,
+        format,
+        source_filename: sourceFilename,
+        history_id: historyId ?? null,
+        skip_log: skipLog,
+      }),
     });
   } catch {
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
   }
 
+  if (res.status === 401) throw new UnauthorizedError();
   if (!res.ok) {
     const data = await res.json();
     throw new Error(data.detail ?? "다운로드 중 오류가 발생했습니다.");
@@ -107,6 +120,67 @@ export async function exportSummary(
   a.download = _buildExportFilename(sourceFilename, format);
   a.click();
   URL.revokeObjectURL(url);
+}
+
+export interface ActivityItem {
+  activity_type: "SUMMARY" | "DOWNLOAD";
+  id: number;
+  file_name: string | null;
+  status: string;
+  created_at: string;
+  document_type?: string | null;
+  file_type?: string | null;
+  summary_mode?: string | null;
+  summary_text?: string | null;
+  download_format?: string | null;
+  linked_history_id?: number | null;
+  error_message?: string | null;
+}
+
+export async function getActivity(
+  accessToken: string,
+  limit: number = 40
+): Promise<ActivityItem[]> {
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/users/me/activity?limit=${limit}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
+  }
+
+  if (res.status === 401) throw new UnauthorizedError();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? "알 수 없는 오류가 발생했습니다.");
+  return data;
+}
+
+export async function deleteActivity(
+  activityType: "SUMMARY" | "DOWNLOAD",
+  id: number,
+  accessToken: string
+): Promise<void> {
+  const path =
+    activityType === "SUMMARY"
+      ? `/users/me/summaries/${id}`
+      : `/users/me/downloads/${id}`;
+
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}${path}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch {
+    throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
+  }
+
+  if (res.status === 401) throw new UnauthorizedError();
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail ?? "삭제 중 오류가 발생했습니다.");
+  }
 }
 
 function _buildExportFilename(sourceFilename: string, format: ExportFormat): string {
