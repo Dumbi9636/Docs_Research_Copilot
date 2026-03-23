@@ -687,6 +687,50 @@
   width: fit-content;
 }
 
+/* ── /summarize 페이지 전용: 세션 복원 UI ───────────────────────────────────── */
+
+/* 복원된 이전 파일명 안내 */
+.restoredFileHint {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.restoredFileNote {
+  margin-left: 6px;
+  color: #9ca3af;
+}
+
+/* 복원 성공 배너 */
+.restoredBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 14px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: #166534;
+}
+
+.restoredDismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  font-size: 0.75rem;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+
+.restoredDismiss:hover {
+  color: #374151;
+}
+
 /* ── /summarize 페이지 전용: 하단 back 링크 ─────────────────────────────────── */
 
 .backLinkRow {

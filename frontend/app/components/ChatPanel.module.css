@@ -1,0 +1,259 @@
+/* ── ChatPanel 전체 컨테이너 ───────────────────────────────────────────────── */
+
+.panel {
+  margin-top: 28px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 헤더 ──────────────────────────────────────────────────────────────────── */
+
+.panelHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.panelTitle {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.panelHint {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* ── 인증 만료 배너 ─────────────────────────────────────────────────────────── */
+
+.authBanner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #fffbeb;
+  border-bottom: 1px solid #fde68a;
+  font-size: 0.875rem;
+  color: #92400e;
+}
+
+.authBannerLink {
+  font-weight: 600;
+  color: #4f6ef7;
+  text-decoration: none;
+}
+
+.authBannerLink:hover {
+  text-decoration: underline;
+}
+
+.authBannerSub {
+  font-size: 0.8rem;
+  color: #b45309;
+}
+
+/* ── 메시지 목록 ────────────────────────────────────────────────────────────── */
+
+.messageList {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* ── 빈 상태 ────────────────────────────────────────────────────────────────── */
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emptyHint {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.exampleChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.exampleChip {
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: #4f6ef7;
+  background: #eef1fe;
+  border: 1px solid #c7d2fe;
+  border-radius: 99px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.exampleChip:hover:not(:disabled) {
+  background: #e0e7ff;
+}
+
+.exampleChip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── 말풍선 ─────────────────────────────────────────────────────────────────── */
+
+.bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 85%;
+}
+
+.bubbleUser {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.bubbleAssistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.bubbleRole {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #9ca3af;
+  padding: 0 4px;
+}
+
+.bubbleContent {
+  margin: 0;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  border-radius: 12px;
+}
+
+.bubbleUser .bubbleContent {
+  background: #4f6ef7;
+  color: #ffffff;
+  border-bottom-right-radius: 4px;
+}
+
+.bubbleAssistant .bubbleContent {
+  background: #f3f4f6;
+  color: #111827;
+  border-bottom-left-radius: 4px;
+}
+
+/* ── 로딩 점 애니메이션 ─────────────────────────────────────────────────────── */
+
+.typingDots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  height: 18px;
+}
+
+.typingDots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #9ca3af;
+  border-radius: 50%;
+  animation: bounce 1.2s infinite ease-in-out;
+}
+
+.typingDots span:nth-child(1) { animation-delay: 0s; }
+.typingDots span:nth-child(2) { animation-delay: 0.2s; }
+.typingDots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30%            { transform: translateY(-5px); }
+}
+
+/* ── 에러 메시지 ────────────────────────────────────────────────────────────── */
+
+.errorMsg {
+  padding: 10px 14px;
+  background: #fff5f5;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #b91c1c;
+}
+
+/* ── 입력 영역 ──────────────────────────────────────────────────────────────── */
+
+.inputRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.input {
+  flex: 1;
+  padding: 10px 14px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  color: #111827;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  resize: none;
+  transition: border-color 0.15s;
+  line-height: 1.6;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #4f6ef7;
+}
+
+.input:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.sendButton {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  background: #4f6ef7;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  align-self: flex-end;
+}
+
+.sendButton:hover:not(:disabled) {
+  background: #3b5bdb;
+}
+
+.sendButton:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}

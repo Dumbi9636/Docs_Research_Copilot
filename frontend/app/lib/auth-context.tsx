@@ -23,6 +23,8 @@ import {
   refreshAccessToken,
   UserInfo,
 } from "./auth-api";
+import { clearUserChats } from "./chatStorage";
+import { clearSession as clearSummarizeSession } from "./summarizeStorage";
 
 const REFRESH_TOKEN_KEY = "refresh_token";
 
@@ -88,10 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 로그아웃
   const signOut = useCallback(async () => {
     if (accessToken) await logoutUser(accessToken);
+    // user가 메모리에 있는 이 시점에 localStorage를 정리합니다.
+    // setUser(null) 이후에는 userId를 알 수 없으므로 반드시 먼저 호출합니다.
+    if (user) {
+      clearUserChats(user.user_id);         // 문서 대화 기록
+      clearSummarizeSession(user.user_id);  // 요약 세션
+    }
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
     setUser(null);
-  }, [accessToken]);
+  }, [accessToken, user]);
 
   // 회원가입
   const register = useCallback(

@@ -62,7 +62,7 @@ export default function MyPage() {
         {/* ── 활동 이력 섹션 ────────────────────────────────────────────── */}
         <section className={styles.activitySection}>
           <div className={styles.sectionHeader}>
-            <h2 className={styles.sectionTitle}>활동 이력</h2>
+            <h2 className={styles.sectionTitle}>작업 이력</h2>
             <p className={styles.sectionDesc}>요약 및 다운로드 활동 내역을 확인할 수 있습니다.</p>
           </div>
           <ActivityList />

@@ -25,7 +25,8 @@ from app.db.session import get_db
 from app.repositories import summary_repository, download_repository
 from app.schemas.summarize import SummarizeRequest, SummarizeResponse
 from app.schemas.export import ExportRequest
-from app.services import summarizer, export_service
+from app.schemas.chat import ChatRequest, ChatResponse
+from app.services import summarizer, export_service, chat_service
 from app.services.ocr_extractor import extract_text_from_image
 from app.services.pdf_extractor import extract_text_from_pdf
 
@@ -392,3 +393,45 @@ def export_route(
         # RFC 5987 방식 — 한글 파일명이 브라우저에서 깨지지 않습니다.
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )
+
+
+@router.post("/chat", response_model=ChatResponse)
+def chat_route(
+    request: ChatRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    문서 기반 대화 엔드포인트.
+
+    history_id로 요약 기록을 조회하고, 요약문을 컨텍스트로 삼아
+    사용자 질문에 답변합니다. 대화 상태는 클라이언트(localStorage)가
+    관리하며, 서버는 무상태로 동작합니다.
+
+    Phase 2 확장 시: chat_sessions / chat_messages 테이블을 추가하고
+    이 라우트에서 메시지를 DB에 저장하는 로직을 덧붙이면 됩니다.
+    서비스 계층(chat_service)은 변경 없이 재사용할 수 있습니다.
+    """
+    # ── 요약 기록 조회 및 권한 확인 ────────────────────────────────────────────
+    record = summary_repository.get_by_id(db, request.history_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="요약 기록을 찾을 수 없습니다.")
+    if record.user_id != current_user.user_id:
+        raise HTTPException(status_code=403, detail="접근 권한이 없습니다.")
+    if not record.output_summary:
+        raise HTTPException(status_code=400, detail="요약 내용이 없는 기록입니다. 요약에 실패한 항목입니다.")
+
+    # ── 질문 검증 ───────────────────────────────────────────────────────────────
+    question = request.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="질문이 비어 있습니다.")
+    if len(question) > 1000:
+        raise HTTPException(status_code=400, detail="질문이 너무 깁니다. 1,000자 이내로 입력해 주세요.")
+
+    # ── Ollama 호출 ─────────────────────────────────────────────────────────────
+    try:
+        ai_answer = chat_service.answer(record.output_summary, request.messages, question)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+
+    return ChatResponse(answer=ai_answer)

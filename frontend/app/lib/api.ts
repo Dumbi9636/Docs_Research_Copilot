@@ -183,6 +183,45 @@ export async function deleteActivity(
   }
 }
 
+// ── 문서 기반 대화 ────────────────────────────────────────────────────────────
+
+export interface ChatApiMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResult {
+  answer: string;
+}
+
+export async function sendChat(
+  historyId: number,
+  messages: ChatApiMessage[],
+  question: string,
+  accessToken: string
+): Promise<ChatResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${BACKEND_URL}/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ history_id: historyId, messages, question }),
+    });
+  } catch {
+    throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");
+  }
+
+  if (res.status === 401) throw new UnauthorizedError();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail ?? "알 수 없는 오류가 발생했습니다.");
+  return data;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _buildExportFilename(sourceFilename: string, format: ExportFormat): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   if (sourceFilename) {
