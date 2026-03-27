@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../lib/auth-context";
-import { sendChat, UnauthorizedError } from "../lib/api";
+import { sendChat, UnauthorizedError, ChatMode } from "../lib/api";
 import { getMessages, saveMessages, ChatMessage } from "../lib/chatStorage";
 import styles from "./ChatPanel.module.css";
 
@@ -27,6 +27,8 @@ export default function ChatPanel({ historyId }: ChatPanelProps) {
   // 토큰 만료로 재로그인이 필요한 상태. localStorage 대화는 유지됩니다.
   const [authExpired, setAuthExpired] = useState(false);
   const [error, setError] = useState("");
+  // 응답 모드: strict(문서 근거만) / chat(해석·일반 설명 허용)
+  const [mode, setMode] = useState<ChatMode>("chat");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -78,7 +80,7 @@ export default function ChatPanel({ historyId }: ChatPanelProps) {
     async function callChat(token: string): Promise<string> {
       // 이전 대화(prevMessages)만 서버에 전달합니다.
       // 현재 질문은 question 파라미터로 별도 전달합니다.
-      const result = await sendChat(historyId, prevMessages, question, token);
+      const result = await sendChat(historyId, prevMessages, question, token, mode);
       return result.answer;
     }
 
@@ -131,8 +133,30 @@ export default function ChatPanel({ historyId }: ChatPanelProps) {
 
       {/* ── 패널 헤더 ────────────────────────────────────────────────── */}
       <div className={styles.panelHeader}>
-        <span className={styles.panelTitle}>요약 내용에 대해 질문하기</span>
-        <span className={styles.panelHint}>요약된 문서 내용을 바탕으로 답변합니다</span>
+        <div className={styles.panelHeaderLeft}>
+          <span className={styles.panelTitle}>문서 기반 질문하기</span>
+          <span className={styles.panelHint}>
+            {mode === "chat"
+              ? "문서 근거 우선 · 해석·일반 설명 허용"
+              : "문서에 있는 내용만 답변"}
+          </span>
+        </div>
+        <div className={styles.modeToggle}>
+          <button
+            className={`${styles.modeBtn} ${mode === "chat" ? styles.modeBtnActive : ""}`}
+            onClick={() => setMode("chat")}
+            title="문서 근거 우선, 해석과 일반 설명도 허용합니다"
+          >
+            대화형
+          </button>
+          <button
+            className={`${styles.modeBtn} ${mode === "strict" ? styles.modeBtnActive : ""}`}
+            onClick={() => setMode("strict")}
+            title="문서에 있는 내용만 답변합니다"
+          >
+            엄격
+          </button>
+        </div>
       </div>
 
       {/* ── 인증 만료 배너 ───────────────────────────────────────────── */}

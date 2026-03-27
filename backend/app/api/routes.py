@@ -439,6 +439,7 @@ def chat_route(
             record.input_text,   # 원문 텍스트 (NULL이면 chat_service에서 fallback 처리)
             request.messages,
             question,
+            request.mode,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))

@@ -194,11 +194,14 @@ export interface ChatResult {
   answer: string;
 }
 
+export type ChatMode = "strict" | "chat";
+
 export async function sendChat(
   historyId: number,
   messages: ChatApiMessage[],
   question: string,
-  accessToken: string
+  accessToken: string,
+  mode: ChatMode = "chat"
 ): Promise<ChatResult> {
   let res: Response;
   try {
@@ -208,7 +211,7 @@ export async function sendChat(
         "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ history_id: historyId, messages, question }),
+      body: JSON.stringify({ history_id: historyId, messages, question, mode }),
     });
   } catch {
     throw new Error("백엔드 서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해 주세요.");

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.refresh_token import RefreshToken
 
-
+# token 발급
 def create(
     db: Session,
     user_id: int,

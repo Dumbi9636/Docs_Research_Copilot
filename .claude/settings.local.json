@@ -13,7 +13,14 @@
       "Bash(find /c/playground/projects/docs_research_copilot -name next.config.* -o -name .eslintrc*)",
       "Bash(find /c/playground/projects/docs_research_copilot -not -path */node_modules/* -not -path */.next/* -not -path */__pycache__/* -not -path */.venv* -type f)",
       "Bash(grep -E '\\\\.\\(tsx?|jsx?|py|css|json\\)$')",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(python -m pytest tests/test_chat_service.py -v)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(python -c \"from app.services.chat_service import _has_cjk, _strip_cjk, _is_instruction_leak, _is_korean_rewrite_request, _last_assistant_content; print\\(''imports OK''\\)\")",
+      "Bash(where python:*)",
+      "Bash(\"C:/Users/user/AppData/Local/Python/bin/python.exe\" -c \"from app.services.chat_service import _has_cjk; print\\(''OK''\\)\")",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/test_chat_service.py -v)",
+      "Bash(.venv/Scripts/pip.exe install:*)"
     ]
   }
 }
